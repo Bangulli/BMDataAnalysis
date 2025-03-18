@@ -46,6 +46,9 @@ class Patient():
         return res
 
     def _set_metadata(self):
+        """
+        writes some useful metadata to the attribute dict
+        """
         init_brain = [sitk.ReadImage(self.path/self.dates[0]/'anat'/elem) for elem in os.listdir(self.path/self.dates[0]/'anat') if elem.startswith('MASK_')][0]
         spacing = init_brain.GetSpacing()
         voxel_volume = spacing[0]*spacing[1]*spacing[2]

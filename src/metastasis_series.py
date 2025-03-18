@@ -1,7 +1,7 @@
 import SimpleITK as sitk
 import numpy as np
 from .metastasis import Metastasis, generate_empty_met_from_met
-from datetime import datetime
+from datetime import datetime, timedelta
 from scipy.ndimage import center_of_mass
 import copy
 from PrettyPrint import *
@@ -110,7 +110,10 @@ class MetastasisTimeSeries():
 
 ######## Public utils
     def get_observation_days(self):
-        return (self.date[self.keys[-1]] - self.date[self.keys[0]]).days
+        """
+        computes and returns the time in days from t0 to tn-1
+        """
+        return (self.dates[self.keys[-1]] - self.dates[self.keys[0]]).days
     
     def resample(self, timeframe_days:int=360, timepoints: int=6, method:str='nearest'):
         """
@@ -118,8 +121,19 @@ class MetastasisTimeSeries():
         for example the default config 360/6 gives a timeseries over a duration of 360 days with 6 timepoints with 60 days in between each
         usefult to reorganize the data for data preparation
         """
-        if method == 'nearest':
-            return self
+        if self.get_observation_days() < timeframe_days - (timeframe_days/timepoints)*0.5: # the series needs to have at least timeframe-0.5deltaT days to be interpolated, deltaT is the period of time in between studies
+            print(f'This series is missing too much data, cannot interpolate {timepoints} timepoints for timeframe {timeframe_days} with an observation period of {self.get_observation_days()}')
+            return None
+        if method == 'nearest': # basic nearest neighbor interpolation
+            t0 = self[0]
+            tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
+            new_series = MetastasisTimeSeries(*t0)
+            for i, tp in enumerate(list(tps.keys())):
+                if i == 0:
+                    continue
+                closest_met_key, _ = self._find_closest_entry(tps[tp])
+                new_series.append(self.time_series[closest_met_key], tps[tp], tp)
+            return new_series
         else:
             raise RuntimeError(f'Invalid interpolation method: {method}')
 
@@ -157,6 +171,12 @@ class MetastasisTimeSeries():
         for i, k in enumerate(self.keys):
             if self.time_series[k] is not None:
                 print(f"    t{i}: {str(self.time_series[k])}, date = {self.dates[k]}")
+    
+    def __getitem__(self, idx):
+        return self.time_series[self.keys[idx]], self.dates[self.keys[idx]], self.keys[idx]
+
+    def __len__(self):
+        return len(self.keys)
 
 ######## Private Utils
     def _find_closest_nonzero_entry(self, date: datetime):
@@ -186,5 +206,17 @@ class MetastasisTimeSeries():
                 ref_key = k
         return ref_key, ref_delta_t
     
-    
+    def _generate_timepoints(self, t0:datetime, timeframe_days:int, timepoints:int):
+        """
+        Utility function that computes the timestamps at regular intervals over a period of time in days
+        returns a dictionary of date-strings as keys and datetimes as values
+        used in resampling
+        """
+        tps = {}
+        tps[datetime.strftime(t0, "%Y%m%d%H%M%S")] = t0
+        delta_t = timedelta(days=timeframe_days/timepoints)
+        for d in range(1, timepoints):
+            tp = t0+d*delta_t
+            tps[datetime.strftime(tp, "%Y%m%d%H%M%S")] = tp
+        return tps
 
