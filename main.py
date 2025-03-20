@@ -19,18 +19,35 @@ import os
 
 if __name__ == '__main__':
     dataset_path = pl.Path('/mnt/nas6/data/Target/batch_copy/reseg_test/set')
+    met_path = pl.Path('/mnt/nas6/data/Target/batch_copy/reseg_test/parsed_mets')
+    os.mkdir(met_path)
+
     pats = [pat for pat in os.listdir(dataset_path) if pat.startswith('sub-PAT')]
     dataset_patients = []
     for pat in pats:
         p = Patient(dataset_path/pat)
         p.print()
+        p.save(met_path)
         dataset_patients.append(p)
-        break
 
-    for i, series in enumerate(dataset_patients[0].mets):
-        new = series.resample()
-        if new is not None:
-            print('resampled series:', i)
-            new.print()
+    loaded_patients = []
+    for pat in pats:
+        p = Patient(met_path/pat, False)
+        p.print()
+        loaded_patients.append(p)
 
+    for met in loaded_patients:
+        for i, series in enumerate(met.mets):
+            new = series.resample(method='nearest')
+            if new is not None:
+                print('nearest neighbor resampled series:', i)
+                new.print()
+            new = series.resample(method='linear')
+            if new is not None:
+                print('linear resampled series:', i)
+                new.print()
+            new = series.resample(method='bspline')
+            if new is not None:
+                print('linear resampled series:', i)
+                new.print()
    

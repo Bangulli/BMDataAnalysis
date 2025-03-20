@@ -1,20 +1,35 @@
 import SimpleITK as sitk
 import numpy as np
-from .metastasis import Metastasis, generate_empty_met_from_met
+from .metastasis import Metastasis, generate_empty_met_from_met, generate_interpolated_met_from_met, InterpolatedMetastasis, load_metastasis
 from datetime import datetime, timedelta
 from scipy.ndimage import center_of_mass
 import copy
+import os
+import pathlib as pl
 from PrettyPrint import *
+from scipy.interpolate import make_interp_spline, BSpline
 
+#### Global utility functions
 def parse_to_timeseries(mets_dict: dict, dates_dict: dict, log: Printer=Printer()):
+    """
+    parses a dictionary of metastases and a dictionary of dates into N MetastasisTimeSeries objects
+    Matches lesions to each other and expands existing time series or spawns new ones depending on correspondence
+    mets_dict must be a dictionary of date strings as keys and metastasis objects as values, each metastasis object represents a single instance!! need to be seperated sucht that there is only one cluster in the mask
+    dates_dict must have the same keys as mets dict and the values are just datetime objects 
+    log is an instance of a PrettyPrint printer, for logging purposes
+    """
+    # init vars
     inf = PPFormat([ColourText('blue'), Effect('bold'), Effect('underlined')]) 
     dates = mets_dict.keys()
+    # runtime checks
     if dates != dates_dict.keys():
         raise RuntimeError("Dates in metastasis dict do not correspond with dates in date dict")
+    # init more vars
     dates = list(dates)
     time_series_list = [MetastasisTimeSeries(elem, dates_dict[dates[0]], dates[0]) for elem in mets_dict[dates[0]]]
     log.tagged_print('INFO', f'Parsed study {dates[0]}, found {len(mets_dict[dates[0]])} metastases at t0', inf)
     empty_met_image = generate_empty_met_from_met(mets_dict[dates[0]][0]) # an empty image that fits the met requirements, used to fill in timepoints in series when the metastasis is already gone
+    # iterate over metastis dict to parse
     for d in dates:
         new = 0
         existing = 0
@@ -55,7 +70,7 @@ def find_best_series_index(metrics, method: str='both'):
     Identifies the best matchin lesion series by finding the maximum overlap, minimum centroid distance
     mode 'overlap': uses maximum overlap
     mode 'centroid': uses minimum centroid distance, if less than lesion diameter
-    mode 'both': finds the lesion with max overlap and min distance given diameter threshold
+    mode 'both': finds the lesion with max overlap and breaks ties with centroid distance, if no overlap just uses centroid distance
     """
     if 'overlap' == method:
         best_series_overlap = None
@@ -97,10 +112,29 @@ def find_best_series_index(metrics, method: str='both'):
                     best_series = i
 
         return best_series
-    
+
+def load_series(path:pl.Path):
+    """
+    Loads a series of metastases from disk
+    """
+    files = sorted(os.listdir(path), key=lambda x: int(x.split(' - ')[0][1:])) # generates a sorted list from t0 to tN
+    t0 = load_metastasis(path/files[0])
+    t0_date = datetime.strptime(files[0].split(' - ')[-1], "%Y%m%d%H%M%S")
+    t0_date_str = 'ses-'+files[0].split(' - ')[-1]
+    new_series = MetastasisTimeSeries(t0, t0_date, t0_date_str)
+    for i, elem in enumerate(files):
+        if i==0:
+            continue
+        tp = load_metastasis(path/elem)
+        tp_date = datetime.strptime(elem.split(' - ')[-1], "%Y%m%d%H%M%S")
+        tp_date_str = 'ses-'+elem.split(' - ')[-1]
+        new_series.append(tp, tp_date, tp_date_str)
 
 
 class MetastasisTimeSeries():
+    """
+    Represents a series of metastases over time in chronological order
+    """
     def __init__(self, t0_metastasis: Metastasis, t0_date: datetime, t0_date_str: str):
         self.time_series = {}
         self.time_series[t0_date_str] = t0_metastasis
@@ -109,6 +143,35 @@ class MetastasisTimeSeries():
         self.keys = [t0_date_str]
 
 ######## Public utils
+    def save(self, path:pl.Path, use_symlinks=True):
+        assert path.is_dir(), "Target path needs to be a directory"
+        # if the series is all interpolated save the values as a csv
+        if all([isinstance(elem, InterpolatedMetastasis) for elem in list(self.time_series.values())]):
+            raise NotImplementedError('Put saving as csv for interpolated series here')
+        # if the series is all natural mets, save them as images and stuff
+        elif all([isinstance(elem, Metastasis) for elem in list(self.time_series.values())]):
+            for i, k in enumerate(self.keys):
+                date_str = datetime.strftime(self.dates[k], "%Y%m%d%H%M%S")
+                tp_name = f"t{i} - {date_str}"
+                os.mkdir(path/tp_name)
+                self.time_series[k].save(path/tp_name, use_symlinks)
+        # error case
+        else:
+            raise RuntimeError('Cannot save TimeSeriesObject, did not receive a homogeneous value dict, needs to be either all Metastasis or all InterpolatedMetastasis')
+
+    def get_trajectory_bspline(self, degree=3):
+        """
+        Generates an interpolated bspline for the volume across time, taking the entire observation period into account
+        """
+        x = []
+        y = []
+        _, ref_t, _ = self[0] # just gets the date at t0
+        for i in range(len(self)): # iterate over self to get all dts and mets
+            met, t = self[i]
+            x.append((t-ref_t).days)
+            y.append(met.lesion_volume)
+        return make_interp_spline(x, y, k=degree) # call scipy make interp spline to return bspline
+
     def get_observation_days(self):
         """
         computes and returns the time in days from t0 to tn-1
@@ -120,20 +183,58 @@ class MetastasisTimeSeries():
         Resamples the timeseries to a given timeframe with given timepoints
         for example the default config 360/6 gives a timeseries over a duration of 360 days with 6 timepoints with 60 days in between each
         usefult to reorganize the data for data preparation
+        supported interpolation methods: 
+            - nearest = nearest neighbor
+            - linear = linear interpolation between the most previous and least after timepoint
+            - bspline = Represents all timepoints in a bspline interpolation and draws data from there
         """
+        # check for data availability
         if self.get_observation_days() < timeframe_days - (timeframe_days/timepoints)*0.5: # the series needs to have at least timeframe-0.5deltaT days to be interpolated, deltaT is the period of time in between studies
             print(f'This series is missing too much data, cannot interpolate {timepoints} timepoints for timeframe {timeframe_days} with an observation period of {self.get_observation_days()}')
             return None
-        if method == 'nearest': # basic nearest neighbor interpolation
+        
+        ## interpolation cases
+        ## basic nearest neighbor interpolation
+        if method == 'nearest': 
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(*t0)
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[0], t0[0])
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
                     continue
                 closest_met_key, _ = self._find_closest_entry(tps[tp])
-                new_series.append(self.time_series[closest_met_key], tps[tp], tp)
+                new_series.append(generate_interpolated_met_from_met(self.time_series[closest_met_key]), tps[tp], tp)
             return new_series
+        
+        ## linear interpolation
+        elif method == 'linear':
+            t0 = self[0]
+            tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[0], t0[0])
+            for i, tp in enumerate(list(tps.keys())):
+                if i == 0:
+                    continue
+                keys_dts = self._find_closest_bilateral(tps[tp])
+                interpolated_volume = self._liner_interpolation(*keys_dts)
+                new_series.append(InterpolatedMetastasis(interpolated_volume), tps[tp], tp)
+            return new_series
+        
+        ## BSpline interpolation
+        elif method == 'bspline':
+            t0 = self[0]
+            tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[0], t0[0])
+            bspline = self.get_trajectory_bspline()
+            for i, tp in enumerate(list(tps.keys())):
+                if i == 0:
+                    continue
+                delta_t = (tps[tp]-tps[0]).days
+                assert delta_t>0 # make sure that the delta between t0 and current to is not negative
+                interpolated_volume = bspline(delta_t)
+                new_series.append(InterpolatedMetastasis(interpolated_volume), tps[tp], tp)
+            raise NotImplementedError('I was working on bspline interpolation but it is lunchtime so ill fix it later')
+        
+        ## invalid method
         else:
             raise RuntimeError(f'Invalid interpolation method: {method}')
 
@@ -153,7 +254,7 @@ class MetastasisTimeSeries():
         target_centroid = center_of_mass(ref_met.image)
         candidate_centroid = center_of_mass(met.image)
         centroid_distance = np.sqrt(np.sum((np.asarray(target_centroid)-np.asarray(candidate_centroid))**2))
-        candidate_radius = (ref_met.lesion_volume_voxel / ((4/3) * np.pi)) ** (1/3)
+        candidate_radius = (ref_met.lesion_size_voxel / ((4/3) * np.pi)) ** (1/3)
         return overlap, centroid_distance, candidate_radius
 
     def append(self, metastasis: Metastasis, date: datetime, date_str:str):
@@ -171,17 +272,53 @@ class MetastasisTimeSeries():
         for i, k in enumerate(self.keys):
             if self.time_series[k] is not None:
                 print(f"    t{i}: {str(self.time_series[k])}, date = {self.dates[k]}")
-    
+
+######## Builtins  
     def __getitem__(self, idx):
         return self.time_series[self.keys[idx]], self.dates[self.keys[idx]], self.keys[idx]
 
     def __len__(self):
         return len(self.keys)
+    
+    def __list__(self):
+        """
+        wraps the python list cast
+        Returns a list of lesion volumes
+        """
+        return [self.time_series[met].lesion_volume for met in self.keys]
+    
+    def __dict__(self):
+        """
+        wraps the python dict cast
+        Returns a dictionary of delta_t as keys and lesion volume as values
+        """
+        value_dict = {}
+        value_dict[0] = self.time_series[0].lesion_volume
+        for i, d in enumerate(self.keys):
+            if i == 0:
+                continue
+            value_dict[int((self.dates[d]-self.dates[0]).days)] = self.time_series[d].lesion_volume
+        return value_dict
 
 ######## Private Utils
+    def _liner_interpolation(self, met1, dt1, met2, dt2):
+        """
+        Interpolates a volume by approximating a line between two time points
+        Uses 2D space, takes delta_t as x and volume as y
+        """
+        met1 = self.time_series[met1]
+        met2 = self.time_series[met2]
+        v1 = met1.lesion_volume
+        v2 = met2.lesion_volume
+        # just a simple line formula where a point in 2D space is defined as p(x,y) where x = delta_t and y = volume
+        a = (v2-v1)/(dt2-dt1) # slope
+        b = v1-a*dt1 # intercept
+        # here we could calc any point in time from these two points, but since dt is already the dimediff from our target the intercept is our desired value
+        return b
+
     def _find_closest_nonzero_entry(self, date: datetime):
         """
-        Iterates over the time series and returns the key for the closest date as well as the time delta in days to a given reference date
+        Iterates over the time series and returns the key for the closest date as well as the time delta in days to a given reference date ignoring dates with no data
         """
         ref_key = self.keys[0]
         ref_delta_t = abs((self.dates[self.keys[0]]-date).days)
@@ -205,6 +342,29 @@ class MetastasisTimeSeries():
                 ref_delta_t = delta_t
                 ref_key = k
         return ref_key, ref_delta_t
+    
+    def _find_closest_bilateral(self, date:datetime):
+        """
+        Iterate over the time series and find the closest date before AND after the reference date
+        """
+        # init references
+        ref_key_before = self.keys[0]
+        ref_key_after = self.keys[-1]
+        ref_delta_t_before = (self.dates[self.keys[0]]-date).days
+        ref_delta_t_after = (self.dates[self.keys[-1]]-date).days
+        # assertain valid values
+        assert ref_delta_t_before < 0, "The reference date should be chornologically after the first timepoint"  # make sure that the date is negative, so the ref date is bigger than the first date, if not given it cant find the closest bilateral
+        assert ref_delta_t_after > 0, "The reference date should be chornologically before the last timepoint"  # make sure that the date is positive, so the ref date is smaller than the last date, if not given it cant find the closest bilateral
+        # iterate over entries
+        for k in self.keys:
+            delta_t = (self.dates[k]-date).days
+            if delta_t > ref_delta_t_before and delta_t < 0: # update before
+                ref_delta_t_before = delta_t
+                ref_key_before = k
+            if delta_t < ref_delta_t_after and delta_t >= 0: # update after
+                ref_key_after = k
+                ref_delta_t_after = delta_t
+        return ref_key_before, ref_delta_t_before, ref_key_after, ref_delta_t_after
     
     def _generate_timepoints(self, t0:datetime, timeframe_days:int, timepoints:int):
         """
