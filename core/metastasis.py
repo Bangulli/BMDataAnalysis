@@ -23,8 +23,11 @@ def load_metastasis(path):
             t1 = path/'t1.nii.gz'
         if 't2.nii.gz' in files:
             t2 = path/'t2.nii.gz'
-        mask = sitk.ReadImage(path/'metastasis_mask.nii.gz')
-        return Metastasis(mask, t1, t2)
+        bc_source = path/'metastasis_mask_binary.nii.gz'
+        mask = sitk.ReadImage(bc_source)
+        if 'metastasis_mask_multiclass.nii.gz' in files:
+            mc_source = path/'metastasis_mask_multiclass.nii.gz'
+        return Metastasis(mask, binary_source=bc_source, multiclass_source=mc_source, t1_path=t1, t2_path=t2)
 
     else:
         return EmptyMetastasis()
@@ -37,7 +40,7 @@ class Metastasis():
     """
     Represents a single metastasis in time
     """
-    def __init__(self, metastatis_mask = sitk.Image, t1_path: pl.Path=None, t2_path: pl.Path=None):
+    def __init__(self, metastatis_mask: sitk.Image, binary_source: pl.Path = None, multiclass_source:pl.Path = None, t1_path: pl.Path=None, t2_path: pl.Path=None):
         """
         Instantiates a metastasis from an sitk.Image
         """
@@ -49,6 +52,8 @@ class Metastasis():
         self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
         self.t1_path = t1_path
         self.t2_path = t2_path
+        self.binary_source = binary_source
+        self.multiclass_source = multiclass_source
 
     def same_space(self, met):
         """
@@ -74,7 +79,15 @@ class Metastasis():
         """
         assert path.is_dir(), "Metastases can only be saved to directories"
         if self.sitk is not None:
-            sitk.WriteImage(self.sitk, path/'metastasis_mask.nii.gz')
+            sitk.WriteImage(self.sitk, path/'metastasis_mask_binary.nii.gz')
+
+            if self.multiclass_source is not None: # save three class as well
+                msk = sitk.ReadImage(self.multiclass_source)
+                msk = sitk.GetArrayFromImage(msk)
+                msk[self.image==0]=0
+                msk = sitk.GetImageFromArray(msk)
+                msk.CopyInformation(self.sitk)
+                sitk.WriteImage(msk, path/"metastasis_mask_multiclass.nii.gz")
         if use_symlinks:
             if self.t1_path is not None:
                 (path/"t1.nii.gz").symlink_to(self.t1_path)

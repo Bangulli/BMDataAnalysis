@@ -11,9 +11,15 @@ import pandas as pd
 import copy
 
 def load_patient(path:pl.Path):
+    """
+    Utility function to load a patient
+    """
     return Patient(path, True)
 
 class Patient():
+    """
+    Represents a patient in the dataset
+    """
     def __init__(self, path: pl.Path, load_mets = False):
         self.path = path
         self.id = path.name
@@ -38,6 +44,65 @@ class Patient():
             self.studies = len(self.dates)
             self._set_metadata(load_mets)
             self.mets = self._load_mets()
+
+    def print(self):
+        """
+        Prints object metadata to the console
+        """
+        print('--------------- BM Analysis Patient object ---------------')
+        print('-- Patient ID:', self.id)
+        print('-- Source Data Path:', self.path)
+        #print('-- Dates:', self.dates)
+        if hasattr(self, 'studies'):
+            print(r'-- #Studies:', self.studies)
+        print('-- Patient Brain Volume [mm³]:', self.brain_volume)
+        if hasattr(self, 'start_date'):
+            print('-- Start Date:', self.start_date)
+        if hasattr(self, 'end_date'):
+            print('-- End Date:', self.end_date)
+        if hasattr(self, 'observation_days'):
+            print('-- Observed Days:', self.observation_days)
+        if hasattr(self, 'avg_study_interval_days'):
+            print('-- Average Days in between Studies:', self.avg_study_interval_days)
+        print(r'-- #Metastases:', len(self.mets))
+        for i, met in enumerate(self.mets):
+            print(f'-- Metastasis time series {i}:')
+            met.print()
+        print('----------------------------------------------------------')
+
+    def save(self, path:pl.Path):
+        """
+        Saves the patients seperated and matched metastases to a new directory
+        """
+        os.mkdir(path/self.id)
+        brain = [(self.path/self.dates[0]/'anat'/elem) for elem in os.listdir(self.path/self.dates[0]/'anat') if elem.startswith('MASK_')][0]
+        (path/self.id/'whole_brain.nii.gz').symlink_to(self.path/self.dates[0]/'anat'/brain)
+        for i, series in enumerate(self.mets):
+            met_name = f"Metastasis {i}"
+            os.mkdir(path/self.id/met_name)
+            series.save(path/self.id/met_name)
+
+    def to_numpy(self):
+        """
+        Returns a numpy array where the columns are the timepoints and the rows are the metastses
+        """
+        raise NotImplementedError('WIP')
+        return
+    
+    def to_df(self):
+        """
+        Returns a pandas DataFrame where the columns are the timepoints and the rows are the metastases
+        Column names are t0, t30, ... where the bumber is the difference in days from t0 at the current timepoint
+        """
+        raise NotImplementedError('WIP')
+        return
+    
+    def to_csv(self, path: pl.Path):
+        """
+        Saves the metastasis dataframe from self.to_df as a csv file and stores a supplementary csv with patient metadata
+        """
+        raise NotImplementedError('WIP')
+        return
 
 ###### Private internal utils
     def _sort_directories(self, dirs, pattern): # courtesy of chatgpt
@@ -96,6 +161,7 @@ class Patient():
         """
         struct_el = ndimage.generate_binary_structure(rank=3, connectivity=2)
         mets_dict = {}
+        treatments_dict = {}
         for date in self.dates:
             mets = []
             mask = sitk.ReadImage(self.path/date/'mets'/'metastasis_labels_1_class.nii.gz')
@@ -113,48 +179,28 @@ class Patient():
                 for label in range(1, n_labels+1):
                     met = sitk.GetImageFromArray((label_arr == label).astype(int))
                     met.CopyInformation(mask)
-                    mets.append(Metastasis(met, t1, t2))
+                    mets.append(
+                        Metastasis(
+                            met, 
+                            binary_source=None, # here its redundant, because we already pass an sitk image as binary source
+                            multiclass_source=self.path/date/'mets'/'metastasis_labels_3_class.nii.gz', 
+                            t1_path=t1, 
+                            t2_path=t2
+                            )
+                        )
             mets_dict[date] = mets
-        return parse_to_timeseries(mets_dict, self.dates_dict)
+            if (self.path/date/'rt').is_dir():
+                treatments_dict[date]=True
+            else:
+                treatments_dict[date]=False
+        return parse_to_timeseries(mets_dict, self.dates_dict, treatments_dict)
 
-    def print(self):
-        """
-        Prints object metadata to the console
-        """
-        print('--------------- BM Analysis Patient object ---------------')
-        print('-- Patient ID:', self.id)
-        print('-- Source Data Path:', self.path)
-        #print('-- Dates:', self.dates)
-        if hasattr(self, 'studies'):
-            print(r'-- #Studies:', self.studies)
-        print('-- Patient Brain Volume [mm³]:', self.brain_volume)
-        if hasattr(self, 'start_date'):
-            print('-- Start Date:', self.start_date)
-        if hasattr(self, 'end_date'):
-            print('-- End Date:', self.end_date)
-        if hasattr(self, 'observation_days'):
-            print('-- Observed Days:', self.observation_days)
-        if hasattr(self, 'avg_study_interval_days'):
-            print('-- Average Days in between Studies:', self.avg_study_interval_days)
-        print(r'-- #Metastases:', len(self.mets))
-        for i, met in enumerate(self.mets):
-            print(f'-- Metastasis time series {i}:')
-            met.print()
-        print('----------------------------------------------------------')
 
-    def save(self, path:pl.Path):
-        """
-        Saves the patients seperated and matched metastases to a new directory
-        """
-        os.mkdir(path/self.id)
-        brain = [(self.path/self.dates[0]/'anat'/elem) for elem in os.listdir(self.path/self.dates[0]/'anat') if elem.startswith('MASK_')][0]
-        (path/self.id/'whole_brain.nii.gz').symlink_to(self.path/self.dates[0]/'anat'/brain)
-        for i, series in enumerate(self.mets):
-            met_name = f"Metastasis {i}"
-            os.mkdir(path/self.id/met_name)
-            series.save(path/self.id/met_name)
 
 class PatientMetCounter(Patient):
+    """
+    This is a hacky way to extract information from the dataset
+    """
     def __init__(self, path, mapping):
         self.path = path
         self.mapping = pd.read_csv(mapping)

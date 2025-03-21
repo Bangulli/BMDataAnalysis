@@ -11,7 +11,7 @@ from scipy.interpolate import make_interp_spline, BSpline
 import matplotlib.pyplot as plt
 
 #### Global utility functions
-def parse_to_timeseries(mets_dict: dict, dates_dict: dict, log: Printer=Printer()):
+def parse_to_timeseries(mets_dict: dict, dates_dict: dict, treatments_dict:dict, log: Printer=Printer()):
     """
     parses a dictionary of metastases and a dictionary of dates into N MetastasisTimeSeries objects
     Matches lesions to each other and expands existing time series or spawns new ones depending on correspondence
@@ -55,11 +55,12 @@ def parse_to_timeseries(mets_dict: dict, dates_dict: dict, log: Printer=Printer(
                     new += 1
             # add empty met objects if no new one was added at the timepoint        
             for i, t in enumerate(time_series_list):
-                if not i in extended_at_timepoint:
+                if not i in extended_at_timepoint: 
                     t.append(empty_met_image, dates_dict[d], d)
             # transcribe new additions from new list to main list
             for t in new_at_timepoint:
-                time_series_list.append(t)
+                if treatments_dict[d]: # only append new time series on treatment days
+                    time_series_list.append(t)
 
 
         log.tagged_print('INFO', f'Parsed study {d}, found {len(mets_dict[d])} metastases: {new} new mets and attached {existing} to existing metastasis series', inf)
@@ -73,7 +74,7 @@ def find_best_series_index(metrics, method: str='both'):
     mode 'centroid': uses minimum centroid distance, if less than lesion diameter
     mode 'both': finds the lesion with max overlap and breaks ties with centroid distance, if no overlap just uses centroid distance
     """
-    m[2] = min(m[2], 6) # clip max diameter to 6mm -> limits max centroid distance
+    
     if 'overlap' == method:
         best_series_overlap = None
         best_overlap = 0
@@ -87,7 +88,8 @@ def find_best_series_index(metrics, method: str='both'):
         best_series_distance = None
         best_dist = np.Infinity
         for i, m in enumerate(metrics):
-            if m[1] < best_dist and m[1]<=m[2]: # look for minimum distance and distance less then ref diameter
+            
+            if m[1] < best_dist and m[1]<=min(m[2], 6): # look for minimum distance and distance less then ref diameter
                 best_dist=m[1]
                 best_series_distance = i
         return best_series_distance
@@ -103,14 +105,14 @@ def find_best_series_index(metrics, method: str='both'):
                 best_dist = m[1]
                 best_overlap = m[0]
             elif m[0] == best_overlap: # if maximum overlap ambiguous use distance
-                if m[1] < best_dist and m[1]<=m[2]:
+                if m[1] < best_dist and m[1]<=min(m[2], 6):
                     best_series = i
                     best_dist = m[1]
 
         # if overlap fails use distance instead
         if best_series is None:
             for i, m in enumerate(metrics):
-                if m[1] < best_dist and m[1]<=m[2]: # look for minimum distance and distance less then ref diameter
+                if m[1] < best_dist and m[1]<=min(m[2], 6): # look for minimum distance and distance less then ref diameter
                     best_series = i
 
         return best_series
@@ -146,6 +148,9 @@ class MetastasisTimeSeries():
 
 ######## Public utils
     def save(self, path:pl.Path, use_symlinks=True):
+        """
+        Saves the metastasis series to a target directory
+        """
         assert path.is_dir(), "Target path needs to be a directory"
         # if the series is all interpolated save the values as a csv
         if all([isinstance(elem, InterpolatedMetastasis) for elem in list(self.time_series.values())]):
@@ -306,6 +311,9 @@ class MetastasisTimeSeries():
 
 ######## Private Utils
     def _plot_trajectory(self, path):
+        """
+        Creates a line plot for the metastasis volume over time with lines connecting the points
+        """
         x = []
         y = []
         _, ref_t, _ = self[0] # just gets the date at t0
@@ -314,13 +322,9 @@ class MetastasisTimeSeries():
             met, t, _ = self[i]
             x.append((t-ref_t).days)
             y.append(met.lesion_volume)
-        bspline = self.get_trajectory_bspline()
-        x_smooth = np.linspace(0, (t-ref_t).days, (t-ref_t).days)
-        y_smooth = bspline(x_smooth)
-        y_smooth[y_smooth<0]=0
+
         # Plot the result
-        plt.plot(x, y, 'o', label="Data Points")
-        plt.plot(x_smooth, y_smooth, label="B-Spline Interpolation")
+        plt.plot(x, y, 'o', label="Data Points", linestyle='-')
         plt.xlabel('Delta T [days]')
         plt.ylabel('Volume [mm³]')
         plt.legend()
@@ -328,6 +332,9 @@ class MetastasisTimeSeries():
         plt.clf()
 
     def _plot_trajectory_comparison(self, path, ref):
+        """
+        creates a plot comparing the current metastasis trajectory to a reference metastasis trajectory
+        """
         ### plot self
         x = []
         y = []
@@ -336,13 +343,8 @@ class MetastasisTimeSeries():
             met, t, _ = self[i]
             x.append((t-ref_t).days)
             y.append(met.lesion_volume)
-        bspline = self.get_trajectory_bspline()
-        x_smooth = np.linspace(0, (t-ref_t).days, (t-ref_t).days)
-        y_smooth = bspline(x_smooth)
-        y_smooth[y_smooth<0]=0
         # Plot the result
-        plt.plot(x, y, 'o', label="Data Points Resampled")
-        plt.plot(x_smooth, y_smooth, label="B-Spline Interpolation Resampled")
+        plt.plot(x, y, 'o', label="Data Points Resampled", linestyle='-')
 
         ### plot ref
         x = []
@@ -352,13 +354,8 @@ class MetastasisTimeSeries():
             met, t, _ = ref[i]
             x.append((t-ref_t).days)
             y.append(met.lesion_volume)
-        bspline = ref.get_trajectory_bspline()
-        x_smooth = np.linspace(0, (t-ref_t).days, (t-ref_t).days)
-        y_smooth = bspline(x_smooth)
-        y_smooth[y_smooth<0]=0
         # Plot the result
-        plt.plot(x, y, 'o', label="Data Points Original")
-        plt.plot(x_smooth, y_smooth, label="B-Spline Interpolation Original")
+        plt.plot(x, y, 'o', label="Data Points Original", linestyle='-')
         plt.legend()
         plt.xlabel('Delta T [days]')
         plt.ylabel('Volume [mm³]')
