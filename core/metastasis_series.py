@@ -8,6 +8,7 @@ import os
 import pathlib as pl
 from PrettyPrint import *
 from scipy.interpolate import make_interp_spline, BSpline
+import matplotlib.pyplot as plt
 
 #### Global utility functions
 def parse_to_timeseries(mets_dict: dict, dates_dict: dict, log: Printer=Printer()):
@@ -72,6 +73,7 @@ def find_best_series_index(metrics, method: str='both'):
     mode 'centroid': uses minimum centroid distance, if less than lesion diameter
     mode 'both': finds the lesion with max overlap and breaks ties with centroid distance, if no overlap just uses centroid distance
     """
+    m[2] = min(m[2], 6) # clip max diameter to 6mm -> limits max centroid distance
     if 'overlap' == method:
         best_series_overlap = None
         best_overlap = 0
@@ -129,7 +131,7 @@ def load_series(path:pl.Path):
         tp_date = datetime.strptime(elem.split(' - ')[-1], "%Y%m%d%H%M%S")
         tp_date_str = 'ses-'+elem.split(' - ')[-1]
         new_series.append(tp, tp_date, tp_date_str)
-
+    return new_series
 
 class MetastasisTimeSeries():
     """
@@ -167,7 +169,7 @@ class MetastasisTimeSeries():
         y = []
         _, ref_t, _ = self[0] # just gets the date at t0
         for i in range(len(self)): # iterate over self to get all dts and mets
-            met, t = self[i]
+            met, t, _ = self[i]
             x.append((t-ref_t).days)
             y.append(met.lesion_volume)
         return make_interp_spline(x, y, k=degree) # call scipy make interp spline to return bspline
@@ -198,7 +200,7 @@ class MetastasisTimeSeries():
         if method == 'nearest': 
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[0], t0[0])
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2])
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
                     continue
@@ -210,7 +212,7 @@ class MetastasisTimeSeries():
         elif method == 'linear':
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[0], t0[0])
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2])
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
                     continue
@@ -223,16 +225,18 @@ class MetastasisTimeSeries():
         elif method == 'bspline':
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[0], t0[0])
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2])
             bspline = self.get_trajectory_bspline()
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
+                    k0 = tp
                     continue
-                delta_t = (tps[tp]-tps[0]).days
+                delta_t = (tps[tp]-tps[k0]).days
                 assert delta_t>0 # make sure that the delta between t0 and current to is not negative
                 interpolated_volume = bspline(delta_t)
+                interpolated_volume = interpolated_volume if interpolated_volume > 0 else 0
                 new_series.append(InterpolatedMetastasis(interpolated_volume), tps[tp], tp)
-            raise NotImplementedError('I was working on bspline interpolation but it is lunchtime so ill fix it later')
+            return new_series
         
         ## invalid method
         else:
@@ -255,7 +259,7 @@ class MetastasisTimeSeries():
         candidate_centroid = center_of_mass(met.image)
         centroid_distance = np.sqrt(np.sum((np.asarray(target_centroid)-np.asarray(candidate_centroid))**2))
         candidate_radius = (ref_met.lesion_size_voxel / ((4/3) * np.pi)) ** (1/3)
-        return overlap, centroid_distance, candidate_radius
+        return overlap, centroid_distance, candidate_radius*2
 
     def append(self, metastasis: Metastasis, date: datetime, date_str:str):
         """
@@ -301,6 +305,67 @@ class MetastasisTimeSeries():
         return value_dict
 
 ######## Private Utils
+    def _plot_trajectory(self, path):
+        x = []
+        y = []
+        _, ref_t, _ = self[0] # just gets the date at t0
+        print(self[0])
+        for i in range(len(self)): # iterate over self to get all dts and mets
+            met, t, _ = self[i]
+            x.append((t-ref_t).days)
+            y.append(met.lesion_volume)
+        bspline = self.get_trajectory_bspline()
+        x_smooth = np.linspace(0, (t-ref_t).days, (t-ref_t).days)
+        y_smooth = bspline(x_smooth)
+        y_smooth[y_smooth<0]=0
+        # Plot the result
+        plt.plot(x, y, 'o', label="Data Points")
+        plt.plot(x_smooth, y_smooth, label="B-Spline Interpolation")
+        plt.xlabel('Delta T [days]')
+        plt.ylabel('Volume [mm³]')
+        plt.legend()
+        plt.savefig(path)
+        plt.clf()
+
+    def _plot_trajectory_comparison(self, path, ref):
+        ### plot self
+        x = []
+        y = []
+        _, ref_t, _ = self[0] # just gets the date at t0
+        for i in range(len(self)): # iterate over self to get all dts and mets
+            met, t, _ = self[i]
+            x.append((t-ref_t).days)
+            y.append(met.lesion_volume)
+        bspline = self.get_trajectory_bspline()
+        x_smooth = np.linspace(0, (t-ref_t).days, (t-ref_t).days)
+        y_smooth = bspline(x_smooth)
+        y_smooth[y_smooth<0]=0
+        # Plot the result
+        plt.plot(x, y, 'o', label="Data Points Resampled")
+        plt.plot(x_smooth, y_smooth, label="B-Spline Interpolation Resampled")
+
+        ### plot ref
+        x = []
+        y = []
+        _, ref_t, _ = ref[0] # just gets the date at t0
+        for i in range(len(ref)): # iterate over self to get all dts and mets
+            met, t, _ = ref[i]
+            x.append((t-ref_t).days)
+            y.append(met.lesion_volume)
+        bspline = ref.get_trajectory_bspline()
+        x_smooth = np.linspace(0, (t-ref_t).days, (t-ref_t).days)
+        y_smooth = bspline(x_smooth)
+        y_smooth[y_smooth<0]=0
+        # Plot the result
+        plt.plot(x, y, 'o', label="Data Points Original")
+        plt.plot(x_smooth, y_smooth, label="B-Spline Interpolation Original")
+        plt.legend()
+        plt.xlabel('Delta T [days]')
+        plt.ylabel('Volume [mm³]')
+        plt.savefig(path)
+        plt.clf()
+
+
     def _liner_interpolation(self, met1, dt1, met2, dt2):
         """
         Interpolates a volume by approximating a line between two time points

@@ -7,34 +7,46 @@ import numpy as np
 from .metastasis import Metastasis
 from .metastasis_series import MetastasisTimeSeries, parse_to_timeseries, load_series
 from scipy import ndimage
+import pandas as pd
+import copy
+
+def load_patient(path:pl.Path):
+    return Patient(path, True)
 
 class Patient():
-    def __init__(self, path: pl.Path, parse_mets = True):
+    def __init__(self, path: pl.Path, load_mets = False):
         self.path = path
         self.id = path.name
-        if parse_mets:
-            self.dates_dict = self._sort_directories(r"^ses-(\d{14})$")
+        if not load_mets:        
+            self.dates_dict = self._sort_directories([d for d in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, d)) and ((self.path/d/'anat').is_dir() or (self.path/d/'rt').is_dir())], r"^ses-(\d{14})$")
             self.dates = list(self.dates_dict.keys())
             self.studies = len(self.dates)
             self._set_metadata()
             self.mets = self._parse_mets()
         else:
-            self.dates_dict = self._sort_directories(r"^t(\d+) - (\d{14})$")
+            mets = [f for f in os.listdir(self.path) if (self.path/f).is_dir()]
+            dirs = []
+            for met in mets:
+                files = [f for f in os.listdir(self.path/met) if (self.path/met/f).is_dir()]
+                for file in files:
+                    dummy = file.split('-')[-1]
+                    dummy = 'tX -'+dummy
+                    if dummy not in dirs:
+                        dirs.append(dummy)
+            self.dates_dict = self._sort_directories(dirs, r"^tX - (\d{14})$")
             self.dates = list(self.dates_dict.keys())
             self.studies = len(self.dates)
-            self._set_metadata()
-            self.mets = self._load_mets(True)
+            self._set_metadata(load_mets)
+            self.mets = self._load_mets()
 
 ###### Private internal utils
-    def _sort_directories(self, pattern): # courtesy of chatgpt
+    def _sort_directories(self, dirs, pattern): # courtesy of chatgpt
         """
         Finds directories in the specified base_dir that match the pattern
         ses-yyyymmddhhmmss, parses the timestamp, and returns a list of directory
         names sorted in chronological order.
         """
-        base_dir = self.path
         # List all directories in the base directory
-        dirs = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d)) and ((base_dir/d/'anat').is_dir() or (base_dir/d/'rt').is_dir())]
         matching_dirs = []
         for d in dirs:
             match = re.match(pattern, d)
@@ -59,17 +71,22 @@ class Patient():
             init_brain = sitk.ReadImage(self.path/'whole_brain.nii.gz')
         else:
             init_brain = [sitk.ReadImage(self.path/self.dates[0]/'anat'/elem) for elem in os.listdir(self.path/self.dates[0]/'anat') if elem.startswith('MASK_')][0]
-        spacing = init_brain.GetSpacing()
-        voxel_volume = spacing[0]*spacing[1]*spacing[2]
-        init_brain = sitk.GetArrayFromImage(init_brain)
-        
-        self.brain_volume = np.sum(init_brain) * voxel_volume
+
         self.start_date = self.dates_dict[self.dates[0]]
         self.end_date = self.dates_dict[self.dates[-1]]
         self.observation_days = (self.end_date-self.start_date).days
         self.avg_study_interval_days = self.observation_days/self.studies
 
+        spacing = init_brain.GetSpacing()
+        voxel_volume = spacing[0]*spacing[1]*spacing[2]
+        init_brain = sitk.GetArrayFromImage(init_brain)
+        self.brain_volume = np.sum(init_brain) * voxel_volume
+        
+
     def _load_mets(self):
+        """
+        calls the load metastases fucntion to load mets from existing data instead of manually parsing them from the raw set again
+        """
         mets = [file for file in os.listdir(self.path) if file.startswith('Metastasis')]
         return [load_series(self.path/file) for file in mets]
 
@@ -83,14 +100,20 @@ class Patient():
             mets = []
             mask = sitk.ReadImage(self.path/date/'mets'/'metastasis_labels_1_class.nii.gz')
             t1 = [file for file in os.listdir(self.path/date/'anat') if file.endswith('T1w.nii.gz') and not file.startswith('MASK_')][0]
-            t2 = [file for file in os.listdir(self.path/date/'anat') if file.endswith('T2w.nii.gz')][0]
+            t1 = self.path/date/'anat'/t1
+    
+            t2 = [file for file in os.listdir(self.path/date/'anat') if file.endswith('T2w.nii.gz')]
+            if t2:
+                t2 = self.path/date/'anat'/t2[0]
+            else: t2 = None
+
             mask_arr = sitk.GetArrayFromImage(mask)
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
             if n_labels != 0:
                 for label in range(1, n_labels+1):
                     met = sitk.GetImageFromArray((label_arr == label).astype(int))
                     met.CopyInformation(mask)
-                    mets.append(Metastasis(met, self.path/date/'anat'/t1, self.path/date/'anat'/t2))
+                    mets.append(Metastasis(met, t1, t2))
             mets_dict[date] = mets
         return parse_to_timeseries(mets_dict, self.dates_dict)
 
@@ -102,12 +125,17 @@ class Patient():
         print('-- Patient ID:', self.id)
         print('-- Source Data Path:', self.path)
         #print('-- Dates:', self.dates)
-        print(r'-- #Studies:', self.studies)
+        if hasattr(self, 'studies'):
+            print(r'-- #Studies:', self.studies)
         print('-- Patient Brain Volume [mm³]:', self.brain_volume)
-        print('-- Start Date:', self.start_date)
-        print('-- End Date:', self.end_date)
-        print('-- Observed Days:', self.observation_days)
-        print('-- Average Days in between Studies:', self.avg_study_interval_days)
+        if hasattr(self, 'start_date'):
+            print('-- Start Date:', self.start_date)
+        if hasattr(self, 'end_date'):
+            print('-- End Date:', self.end_date)
+        if hasattr(self, 'observation_days'):
+            print('-- Observed Days:', self.observation_days)
+        if hasattr(self, 'avg_study_interval_days'):
+            print('-- Average Days in between Studies:', self.avg_study_interval_days)
         print(r'-- #Metastases:', len(self.mets))
         for i, met in enumerate(self.mets):
             print(f'-- Metastasis time series {i}:')
@@ -120,8 +148,35 @@ class Patient():
         """
         os.mkdir(path/self.id)
         brain = [(self.path/self.dates[0]/'anat'/elem) for elem in os.listdir(self.path/self.dates[0]/'anat') if elem.startswith('MASK_')][0]
-        (path/'whole_brain.nii.gz').symlink_to(self.path/self.dates[0]/'anat'/brain)
+        (path/self.id/'whole_brain.nii.gz').symlink_to(self.path/self.dates[0]/'anat'/brain)
         for i, series in enumerate(self.mets):
             met_name = f"Metastasis {i}"
             os.mkdir(path/self.id/met_name)
             series.save(path/self.id/met_name)
+
+class PatientMetCounter(Patient):
+    def __init__(self, path, mapping):
+        self.path = path
+        self.mapping = pd.read_csv(mapping)
+        self.id = path.name
+        self.dates_dict = self._sort_directories([d for d in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, d)) and ((self.path/d/'anat').is_dir() or (self.path/d/'rt').is_dir())], r"^ses-(\d{14})$")
+        self.dates = list(self.dates_dict.keys())
+        self.studies = len(self.dates)
+        self.mets = self._count_mets()
+
+    def _count_mets(self):
+        struct_el = ndimage.generate_binary_structure(rank=3, connectivity=2)
+        mets = 0
+        rts = [d for d in self.dates if (self.path/d/'rt').is_dir()]
+
+        mapped_path = self.mapping.loc[self.mapping['source_study_path'] == str(self.path/rts[-1])] # dates are in chronological order so the last rt in the series should have all metastases found in rt
+        if not mapped_path.empty:
+            path = str(mapped_path.iloc[0]['nnUNet_set_dir'])
+            name = str(mapped_path.iloc[0]['nnUNet_UID'])
+            name += '0001.nii.gz' # mask
+            rt_gt_path = pl.Path(path)
+            mask = sitk.ReadImage(rt_gt_path/name)
+            mask_arr = sitk.GetArrayFromImage(mask)
+            label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
+            mets+=n_labels
+        return mets

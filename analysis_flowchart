@@ -1,0 +1,32 @@
+digraph {
+	A [label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0">
+        <TR><TD><B>Patient Class</B></TD></TR>
+        <TR><TD>Stores metadata</TD></TR>
+        <TR><TD>Represents a patient with N metastases over time</TD></TR>
+    </TABLE>
+>]
+	B [label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0">
+        <TR><TD><B>Time Series Class</B></TD></TR>
+        <TR><TD>Stores Dates and Metastases</TD></TR>
+        <TR><TD>Represents multiple metastases with temporal attachment</TD></TR>
+    </TABLE>
+>]
+	C [label=<
+    <TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0">
+        <TR><TD><B>Metastasis Class</B></TD></TR>
+        <TR><TD>Stores Lesion Volume</TD></TR>
+        <TR><TD>Represents a single metastasis, no temporal attachment</TD></TR>
+    </TABLE>
+>]
+	F [label="Empty Metastasis Class"]
+	D [label="Interpolated Metastasis Class"]
+	C -> F [label=Inherits]
+	C -> D [label=Inherits]
+	C -> B [label=Form]
+	F -> B [label=Form]
+	D -> B [label=Form]
+	B -> A [label=Form]
+	A -> B [label=Parses]
+}
