@@ -4,25 +4,32 @@ import re
 import os
 import SimpleITK as sitk
 import numpy as np
-from .metastasis import Metastasis
+from .metastasis import Metastasis, EmptyMetastasis
 from .metastasis_series import MetastasisTimeSeries, parse_to_timeseries, load_series
 from scipy import ndimage
 import pandas as pd
 import copy
+from PrettyPrint import *
 
 def load_patient(path:pl.Path):
     """
     Utility function to load a patient
     """
-    return Patient(path, True)
+    if any([f for f in os.listdir(path) if f.startswith('Metastasis')]):
+        return Patient(path, True)
+    else:
+        print('== Found no Metastases in patient directory!')
+        return False
 
 class Patient():
     """
     Represents a patient in the dataset
     """
-    def __init__(self, path: pl.Path, load_mets = False):
+    def __init__(self, path: pl.Path, load_mets = False, log=Printer(), met_dir_name:str='mets'):
         self.path = path
         self.id = path.name
+        self.log = log
+        self.met_dir_name = met_dir_name
         if not load_mets:        
             self.dates_dict = self._sort_directories([d for d in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, d)) and ((self.path/d/'anat').is_dir() or (self.path/d/'rt').is_dir())], r"^ses-(\d{14})$")
             self.dates = list(self.dates_dict.keys())
@@ -82,6 +89,13 @@ class Patient():
             os.mkdir(path/self.id/met_name)
             series.save(path/self.id/met_name)
 
+    def resample_all_timeseries(self, timeframe_days:int=360, timepoints: int=6, method:str='linear'):
+        """
+        applies the resampling to all metastases in the patient
+        """
+        self.mets = [met.resample(timeframe_days, timepoints, method) for met in self.mets]
+
+####### Conversion utilities      
     def to_numpy(self):
         """
         Returns a numpy array where the columns are the timepoints and the rows are the metastses
@@ -103,8 +117,33 @@ class Patient():
         """
         raise NotImplementedError('WIP')
         return
+    
+    def to_dicts(self):
+        """
+        Returns a list of dictionaries to be written with the csv library for example
+        each dict is a time series
+        """
+        dict_list = []
+        for i, ts in enumerate(self.mets):
+            if ts is not None:
+                cur_dict = ts.dict()
+                id = f"{self.id}:{i}"
+                cur_dict['Lesion ID'] = id
+                cur_dict['Brain Volume'] = self.brain_volume
+                dict_list.append(cur_dict)
+        return dict_list
+    
+    def lesion_wise_rano(self, mode='3d'):
+        dict_list = []
+        for i, ts in enumerate(self.mets):
+            if ts is not None:
+                cur_dict = ts.to_rano(mode)
+                id = f"{self.id}:{i}"
+                cur_dict['Lesion ID'] = id
+                dict_list.append(cur_dict)
+        return dict_list
 
-###### Private internal utils
+####### Private internal utils
     def _sort_directories(self, dirs, pattern): # courtesy of chatgpt
         """
         Finds directories in the specified base_dir that match the pattern
@@ -164,7 +203,8 @@ class Patient():
         treatments_dict = {}
         for date in self.dates:
             mets = []
-            mask = sitk.ReadImage(self.path/date/'mets'/'metastasis_labels_1_class.nii.gz')
+            mask = sitk.ReadImage(self.path/date/self.met_dir_name/'metastasis_labels_1_class.nii.gz')
+
             t1 = [file for file in os.listdir(self.path/date/'anat') if file.endswith('T1w.nii.gz') and not file.startswith('MASK_')][0]
             t1 = self.path/date/'anat'/t1
     
@@ -175,7 +215,8 @@ class Patient():
 
             mask_arr = sitk.GetArrayFromImage(mask)
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
-            if n_labels != 0:
+
+            if n_labels != 0: # check whether there even are labels at the timepoint
                 for label in range(1, n_labels+1):
                     met = sitk.GetImageFromArray((label_arr == label).astype(int))
                     met.CopyInformation(mask)
@@ -183,17 +224,20 @@ class Patient():
                         Metastasis(
                             met, 
                             binary_source=None, # here its redundant, because we already pass an sitk image as binary source
-                            multiclass_source=self.path/date/'mets'/'metastasis_labels_3_class.nii.gz', 
+                            multiclass_source= self.path/date/self.met_dir_name/'metastasis_labels_3_class.nii.gz' if (self.path/date/self.met_dir_name/'metastasis_labels_3_class.nii.gz').is_file() else None, 
                             t1_path=t1, 
                             t2_path=t2
                             )
                         )
-            mets_dict[date] = mets
+                mets_dict[date] = mets
+            else: # append an empty metastasis if not
+                mets_dict[date] = [EmptyMetastasis(t1, t2)]
+
             if (self.path/date/'rt').is_dir():
                 treatments_dict[date]=True
             else:
                 treatments_dict[date]=False
-        return parse_to_timeseries(mets_dict, self.dates_dict, treatments_dict)
+        return parse_to_timeseries(mets_dict, self.dates_dict, treatments_dict, self.log)
 
 
 

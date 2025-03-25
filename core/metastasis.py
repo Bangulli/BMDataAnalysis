@@ -5,14 +5,11 @@ import os
 import pathlib as pl
 
 def generate_empty_met_from_met(met):
-    met = copy.deepcopy(met)
-    met.image = None
-    met.sitk = None
-    met.lesion_volume_voxel = 0
-    met.lesion_volume = 0
-    met.t1_path = None
-    met.t2_path = None
-    return met
+    emet = EmptyMetastasis()
+    emet.t1_path = met.t1_path
+    emet.t2_path = met.t2_path
+    emet.voxel_spacing = met.voxel_spacing
+    return emet
 
 def load_metastasis(path):
     files = os.listdir(path)
@@ -23,14 +20,17 @@ def load_metastasis(path):
             t1 = path/'t1.nii.gz'
         if 't2.nii.gz' in files:
             t2 = path/'t2.nii.gz'
-        bc_source = path/'metastasis_mask_binary.nii.gz'
-        mask = sitk.ReadImage(bc_source)
-        if 'metastasis_mask_multiclass.nii.gz' in files:
-            mc_source = path/'metastasis_mask_multiclass.nii.gz'
-        return Metastasis(mask, binary_source=bc_source, multiclass_source=mc_source, t1_path=t1, t2_path=t2)
 
-    else:
-        return EmptyMetastasis()
+        if 'metastasis_mask_binary.nii.gz' in files:
+            bc_source = path/'metastasis_mask_binary.nii.gz'
+            mask = sitk.ReadImage(bc_source)
+            if 'metastasis_mask_multiclass.nii.gz' in files:
+                mc_source = path/'metastasis_mask_multiclass.nii.gz'
+            return Metastasis(mask, binary_source=bc_source, multiclass_source=mc_source, t1_path=t1, t2_path=t2)
+
+        else:
+            return EmptyMetastasis(t1, t2)
+    else: return EmptyMetastasis()
 
 def generate_interpolated_met_from_met(met):
     i_met = InterpolatedMetastasis(met.lesion_volume)
@@ -83,16 +83,52 @@ class Metastasis():
 
             if self.multiclass_source is not None: # save three class as well
                 msk = sitk.ReadImage(self.multiclass_source)
-                msk = sitk.GetArrayFromImage(msk)
-                msk[self.image==0]=0
-                msk = sitk.GetImageFromArray(msk)
-                msk.CopyInformation(self.sitk)
                 sitk.WriteImage(msk, path/"metastasis_mask_multiclass.nii.gz")
+
         if use_symlinks:
             if self.t1_path is not None:
                 (path/"t1.nii.gz").symlink_to(self.t1_path)
             if self.t2_path is not None:
                 (path/"t2.nii.gz").symlink_to(self.t2_path)
+
+    def rano(self, baseline, nadir, mode='3d'):
+        """
+        Returns the RANO-BM classification for the Metastasis, given the basline and nadir values from the series
+        """
+        if baseline<nadir:
+            print("Values for autoread RANO incorrect: baseline < nadir")
+
+        if self.lesion_volume == 0:
+            return 'CR'
+            
+        ratio_baseline = self.lesion_volume/baseline
+        ratio_nadir = self.lesion_volume/nadir
+        if mode == '1d':
+            th1 = 0.7
+            th2 = 1.2
+        elif mode == '3d':
+            th1 = 0.343
+            th2 = 1.728
+
+        if ratio_baseline<=th1:
+            response='PR'
+        elif ratio_nadir<th2:
+            response='SD'
+        else:
+            response='PD'
+        return response
+    
+    def resample(self, ref):
+        """
+        Resamples the underlying images
+        for now unused but could be useful later
+        """
+        self.sitk = sitk.Resample(self.sitk, referenceImage=ref.sitk)
+        self.image = sitk.GetArrayFromImage(self.sitk)
+        self.voxel_spacing = self.sitk.GetSpacing()
+        self.voxel_volume = self.voxel_spacing[0] * self.voxel_spacing[1] * self.voxel_spacing[2]
+        self.lesion_size_voxel = np.sum(self.image)
+        self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
 
 
 class InterpolatedMetastasis(Metastasis):
@@ -106,11 +142,11 @@ class InterpolatedMetastasis(Metastasis):
         raise RuntimeError('InterpolatedMetastasis Objects can not be saved, they are missing the image data')
     
 class EmptyMetastasis(Metastasis):
-    def __init__(self):
+    def __init__(self, t1_path=None, t2_path=None):
         self.image = None
         self.sitk = None
         self.lesion_volume_voxel = 0
         self.lesion_volume = 0
-        self.t1_path = None
-        self.t2_path = None
-        self.spacing = (1, 1, 1)
+        self.t1_path = t1_path
+        self.t2_path = t2_path
+        self.voxel_spacing = (1, 1, 1)
