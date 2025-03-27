@@ -259,7 +259,7 @@ class PatientMetCounter(Patient):
         mets = 0
         rts = [d for d in self.dates if (self.path/d/'rt').is_dir()]
 
-        mapped_path = self.mapping.loc[self.mapping['source_study_path'] == str(self.path/rts[-1])] # dates are in chronological order so the last rt in the series should have all metastases found in rt
+        mapped_path = self.mapping.loc[self.mapping['source_study_path'] == str(self.path/self.dates[-1])] # dates are in chronological order so the last entry in the series should have all metastases found in rt
         if not mapped_path.empty:
             path = str(mapped_path.iloc[0]['nnUNet_set_dir'])
             name = str(mapped_path.iloc[0]['nnUNet_UID'])
