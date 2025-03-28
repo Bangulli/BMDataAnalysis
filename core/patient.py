@@ -269,4 +269,8 @@ class PatientMetCounter(Patient):
             mask_arr = sitk.GetArrayFromImage(mask)
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
             mets+=n_labels
+
+            self.mask = mask
+            self.mask_arr = mask_arr
+            self.labels = label_arr
         return mets

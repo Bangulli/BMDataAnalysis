@@ -291,7 +291,7 @@ class MetastasisTimeSeries():
         target_centroid = center_of_mass(ref_met.image)
         candidate_centroid = center_of_mass(met.image)
         centroid_distance = np.sqrt(np.sum((np.asarray(target_centroid)-np.asarray(candidate_centroid))**2))
-        candidate_radius = (ref_met.lesion_size_voxel / ((4/3) * np.pi)) ** (1/3)
+        candidate_radius = (ref_met.lesion_volume / ((4/3) * np.pi)) ** (1/3) # accidentally used voxel volume and not mm³ volume
         return overlap, centroid_distance, candidate_radius*2
 
     def append(self, metastasis: Metastasis, date: datetime, date_str:str):

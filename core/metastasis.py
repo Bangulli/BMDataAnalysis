@@ -123,12 +123,21 @@ class Metastasis():
         Resamples the underlying images
         for now unused but could be useful later
         """
-        self.sitk = sitk.Resample(self.sitk, referenceImage=ref.sitk)
-        self.image = sitk.GetArrayFromImage(self.sitk)
-        self.voxel_spacing = self.sitk.GetSpacing()
-        self.voxel_volume = self.voxel_spacing[0] * self.voxel_spacing[1] * self.voxel_spacing[2]
-        self.lesion_size_voxel = np.sum(self.image)
-        self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
+        if not isinstance(ref, sitk.Image):
+            self.sitk = sitk.Resample(self.sitk, referenceImage=ref.sitk)
+            self.image = sitk.GetArrayFromImage(self.sitk)
+            self.voxel_spacing = self.sitk.GetSpacing()
+            self.voxel_volume = self.voxel_spacing[0] * self.voxel_spacing[1] * self.voxel_spacing[2]
+            self.lesion_size_voxel = np.sum(self.image)
+            self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
+        else:
+            self.sitk = sitk.Resample(self.sitk, referenceImage=ref)
+            self.image = sitk.GetArrayFromImage(self.sitk)
+            self.voxel_spacing = self.sitk.GetSpacing()
+            self.voxel_volume = self.voxel_spacing[0] * self.voxel_spacing[1] * self.voxel_spacing[2]
+            self.lesion_size_voxel = np.sum(self.image)
+            self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
+
 
 
 class InterpolatedMetastasis(Metastasis):
