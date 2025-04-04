@@ -7,8 +7,8 @@ import os
 from PrettyPrint import *
 
 if __name__ == '__main__':
-    dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch')
-    met_path = pl.Path('/mnt/nas6/data/Target/PARSED_1C_METS_mrct1000_nobatch')
+    dataset_path = pl.Path('/mnt/nas6/data/Target/batch_copy/rerun_test/processed')
+    met_path = pl.Path('/mnt/nas6/data/Target/batch_copy/rerun_test/parsed_3')
     
     os.makedirs(met_path, exist_ok=True)
 
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     logger = Printer(log_type='txt')
     for pat in pats:
         print('== working on patient:', pat)
-        p = Patient(dataset_path/pat, log=logger, met_dir_name='mets_task502')
+        p = Patient(dataset_path/pat, log=logger, met_dir_name='mets_task504-524')
         p.print()
         p.save(met_path)
 

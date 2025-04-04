@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 if __name__ == '__main__':
     ##### source data
     dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch')
-    parsed_path = pl.Path('/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch')
+    parsed_path = pl.Path('/mnt/nas6/data/Target/task_502_PARSED_METS_mrct1000_nobatch')
 
     pats = [pat for pat in os.listdir(dataset_path) if pat.startswith('sub-PAT')]
 

@@ -85,9 +85,7 @@ class Patient():
         brain = [(self.path/self.dates[0]/'anat'/elem) for elem in os.listdir(self.path/self.dates[0]/'anat') if elem.startswith('MASK_')][0]
         (path/self.id/'whole_brain.nii.gz').symlink_to(self.path/self.dates[0]/'anat'/brain)
         for i, series in enumerate(self.mets):
-            met_name = f"Metastasis {i}"
-            os.mkdir(path/self.id/met_name)
-            series.save(path/self.id/met_name)
+            series.save(path/self.id)
 
     def resample_all_timeseries(self, timeframe_days:int=360, timepoints: int=6, method:str='linear'):
         """
@@ -127,7 +125,7 @@ class Patient():
         for i, ts in enumerate(self.mets):
             if ts is not None:
                 cur_dict = ts.dict()
-                id = f"{self.id}:{i}"
+                id = f"{self.id}:{ts.id.split(' ')[-1]}"
                 cur_dict['Lesion ID'] = id
                 cur_dict['Brain Volume'] = self.brain_volume
                 dict_list.append(cur_dict)
@@ -138,10 +136,15 @@ class Patient():
         for i, ts in enumerate(self.mets):
             if ts is not None:
                 cur_dict = ts.to_rano(mode)
-                id = f"{self.id}:{i}"
+                id = f"{self.id}:{ts.id.split(' ')[-1]}"
                 cur_dict['Lesion ID'] = id
                 dict_list.append(cur_dict)
         return dict_list
+    
+    def discard_unmatched(self, matched:list):
+        initial = len(self.mets)
+        self.mets = [met for met in self.mets if met.id in matched]
+        print(f"discarded {initial-len(self.mets)} metastases series, kept metastses: {[met.id for met in self.mets]}")
 
 ####### Private internal utils
     def _sort_directories(self, dirs, pattern): # courtesy of chatgpt
@@ -214,6 +217,7 @@ class Patient():
             else: t2 = None
 
             mask_arr = sitk.GetArrayFromImage(mask)
+            #mask_arr = ndimage.binary_opening(mask_arr, struct_el)
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
 
             if n_labels != 0: # check whether there even are labels at the timepoint
@@ -255,7 +259,7 @@ class PatientMetCounter(Patient):
         self.mets = self._count_mets()
 
     def _count_mets(self):
-        struct_el = ndimage.generate_binary_structure(rank=3, connectivity=2)
+        struct_el = ndimage.generate_binary_structure(rank=3, connectivity=3)
         mets = 0
         rts = [d for d in self.dates if (self.path/d/'rt').is_dir()]
 
@@ -267,6 +271,7 @@ class PatientMetCounter(Patient):
             rt_gt_path = pl.Path(path)
             mask = sitk.ReadImage(rt_gt_path/name)
             mask_arr = sitk.GetArrayFromImage(mask)
+            mask_arr = ndimage.binary_closing(mask_arr, struct_el)
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
             mets+=n_labels
 

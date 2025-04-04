@@ -24,6 +24,7 @@ def load_metastasis(path):
         if 'metastasis_mask_binary.nii.gz' in files:
             bc_source = path/'metastasis_mask_binary.nii.gz'
             mask = sitk.ReadImage(bc_source)
+            mc_source=None
             if 'metastasis_mask_multiclass.nii.gz' in files:
                 mc_source = path/'metastasis_mask_multiclass.nii.gz'
             return Metastasis(mask, binary_source=bc_source, multiclass_source=mc_source, t1_path=t1, t2_path=t2)

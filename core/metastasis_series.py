@@ -51,7 +51,7 @@ def parse_to_timeseries(mets_dict: dict, dates_dict: dict, treatments_dict:dict,
 
             else: # make new timeseries and add to a new list, to avoid confusing the rest of the code
                 if met.lesion_volume != 0:
-                    new_at_timepoint.append(MetastasisTimeSeries(copy.deepcopy(met), dates_dict[d], d))
+                    new_at_timepoint.append(MetastasisTimeSeries(copy.deepcopy(met), dates_dict[d], d, str(len(time_series_list)+len(new_at_timepoint))))
                     new += 1
 
         # add empty met objects if no new one was added at the timepoint        
@@ -129,7 +129,7 @@ def load_series(path:pl.Path):
     t0 = load_metastasis(path/files[0])
     t0_date = datetime.strptime(files[0].split(' - ')[-1], "%Y%m%d%H%M%S")
     t0_date_str = 'ses-'+files[0].split(' - ')[-1]
-    new_series = MetastasisTimeSeries(t0, t0_date, t0_date_str)
+    new_series = MetastasisTimeSeries(t0, t0_date, t0_date_str, path.name)
     for i, elem in enumerate(files):
         if i==0:
             continue
@@ -157,12 +157,13 @@ class MetastasisTimeSeries():
     """
     Represents a series of metastases over time in chronological order
     """
-    def __init__(self, t0_metastasis: Metastasis, t0_date: datetime, t0_date_str: str):
+    def __init__(self, t0_metastasis: Metastasis, t0_date: datetime, t0_date_str: str, id:str):
         self.time_series = {}
         self.time_series[t0_date_str] = t0_metastasis
         self.dates = {}
         self.dates[t0_date_str] = t0_date	
         self.keys = [t0_date_str]
+        self.id = f"Metastasis {id}" if not id.startswith('Metastasis') else id
 
 ######## Public utils
     def save(self, path:pl.Path, use_symlinks=True):
@@ -170,6 +171,8 @@ class MetastasisTimeSeries():
         Saves the metastasis series to a target directory
         """
         assert path.is_dir(), "Target path needs to be a directory"
+        path = path/self.id
+        os.makedirs(path, exist_ok=True)
         # if the series is all interpolated save the values as a csv
         if all([isinstance(elem, InterpolatedMetastasis) for elem in list(self.time_series.values())]):
             raise NotImplementedError('Put saving as csv for interpolated series here')
@@ -223,7 +226,7 @@ class MetastasisTimeSeries():
         if method == 'nearest': 
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2])
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2], self.id)
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
                     continue
@@ -235,7 +238,7 @@ class MetastasisTimeSeries():
         elif method == 'linear':
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2])
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2], self.id)
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
                     continue
@@ -248,7 +251,7 @@ class MetastasisTimeSeries():
         elif method == 'bspline':
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2])
+            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2], self.id)
             bspline = self.get_trajectory_bspline()
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
@@ -291,7 +294,7 @@ class MetastasisTimeSeries():
         target_centroid = center_of_mass(ref_met.image)
         candidate_centroid = center_of_mass(met.image)
         centroid_distance = np.sqrt(np.sum((np.asarray(target_centroid)-np.asarray(candidate_centroid))**2))
-        candidate_radius = (ref_met.lesion_volume / ((4/3) * np.pi)) ** (1/3) # accidentally used voxel volume and not mm³ volume
+        candidate_radius = (ref_met.lesion_volume / ((4/3) * np.pi)) ** (1/3) # accidentally used voxel volume and not mm³ volume, should be minor mistake though, ost images are 1x1x1mm
         return overlap, centroid_distance, candidate_radius*2
 
     def append(self, metastasis: Metastasis, date: datetime, date_str:str):

@@ -9,54 +9,102 @@ import umap
 import tempfile
 from PIL import Image
 from matplotlib.gridspec import GridSpec
+import seaborn as sns
+
 
 def plot_sankey(df, path, use_tempdir=False):
-    # Get all unique labels across timepoints, with time info
-    labels = []
-    label_lookup = {}
-    for t_idx, col in enumerate(df.columns):
-        for label in df[col].unique():
-            node_name = f"{label} (T{t_idx+1})"
-            if node_name not in label_lookup:
-                label_lookup[node_name] = len(labels)
-                labels.append(node_name)
+    fixed_order = ['CR', 'PR', 'SD', 'PD']
+    base_colors = {
+        'CR': '#1f77b4',  # blue
+        'PR': '#ff7f0e',  # orange
+        'SD': '#2ca02c',  # green
+        'PD': '#d62728'   # red
+    }
 
-    # Build the flows: between T0→T1, T1→T2, etc.
+    labels = ['T0']  # single origin node
+    values = [len(df)]
+    label_lookup = {'T0': 0}
+    node_colors = ['#aaaaaa']
+    node_y = [0.5]  # center it vertically
+
+    n_timepoints = len(df.columns)
+    step_y = 1 / len(fixed_order)
+
+    # Build the rest of the nodes
+    for t_idx in range(n_timepoints):
+        for i, cat in enumerate(fixed_order):
+            label = f"T{t_idx+1}-{cat}"
+            label_lookup[label] = len(labels)
+            labels.append(label)
+            node_colors.append(base_colors.get(cat, "gray"))
+            node_y.append(i * step_y)
+
+    # Build flows (links)
     source = []
     target = []
     value = []
+    link_colors = []
 
-    timepoints = df.columns
-    for i in range(len(timepoints) - 1):
-        from_tp = timepoints[i]
-        to_tp = timepoints[i + 1]
+    # 🔹 T0 → T1 links
+    first_tp = df.columns[0]
+    first_counts = df[first_tp].value_counts().to_dict()
+    for cat in fixed_order:
+        if cat not in first_counts.keys():
+            continue
+        count = first_counts[cat]
+        from_label = 'T0'
+        to_label = f"T1-{cat}"
+        if to_label in label_lookup:
+            source.append(label_lookup[from_label])
+            target.append(label_lookup[to_label])
+            value.append(count)
+            link_colors.append(base_colors.get(cat, 'gray'))
 
-        transition_counts = df.groupby([from_tp, to_tp]).size().reset_index(name='count')
-        for _, row in transition_counts.iterrows():
-            source_name = f"{row[from_tp]} (T{i+1})"
-            target_name = f"{row[to_tp]} (T{i+2})"
-            source.append(label_lookup[source_name])
-            target.append(label_lookup[target_name])
-            value.append(row['count'])
+    [print(l, v) for l, v in zip(labels, value)]
+    print(labels)
+    print(value)
+    # 🔹 T1 → T2, T2 → T3, ... regular links
+    for i in range(n_timepoints - 1):
+        from_tp = df.columns[i]
+        to_tp = df.columns[i + 1]
 
-    # Create Sankey diagram
+        transitions = df.groupby([from_tp, to_tp]).size().reset_index(name='count')
+        for _, row in transitions.iterrows():
+            from_label = f"T{i+1}-{row[from_tp]}"
+            to_label = f"T{i+2}-{row[to_tp]}"
+
+            if from_label in label_lookup and to_label in label_lookup:
+                source.append(label_lookup[from_label])
+                target.append(label_lookup[to_label])
+                value.append(row['count'])
+                link_colors.append(base_colors.get(row[from_tp], "gray"))
+
+    labels = [f"{l}={value[i]}" for i, l in enumerate(labels)]
+
+
+    # Create Sankey
     fig = go.Figure(data=[go.Sankey(
+        arrangement="fixed",  # allows decent auto-layout with T0
         node=dict(
             pad=15,
             thickness=20,
             line=dict(color="black", width=0.5),
             label=labels,
-            color="lightblue"
+            color=node_colors,
+            y=node_y
         ),
         link=dict(
             source=source,
             target=target,
-            value=value
-        ))])
+            value=value,
+            color=link_colors
+        )
+    )])
 
     fig.update_layout(title_text="RANO Flow Over Time", font_size=12)
+
     if not use_tempdir:
-        fig.write_image(path/"rano_flow_sankey_plot.png", width=1000, height=600)
+        fig.write_image(path / "rano_flow_sankey_plot.png", width=1000, height=600)
     else:
         temp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
         fig.write_image(temp_path, width=1000, height=600)
@@ -65,7 +113,8 @@ def plot_sankey(df, path, use_tempdir=False):
 
 def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluster", init_col="0"):
     os.makedirs(output_dir, exist_ok=True)
-
+    df.loc[:, '0'] = 1
+    data_cols = ['0']+data_cols
     unique_labels = np.unique(df[label_col])
     print('found unique labels:', unique_labels)
     c_centers = np.zeros((len(unique_labels), len(data_cols)))
@@ -95,8 +144,8 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         fig = plt.figure(figsize=(12, 12))
         gs = GridSpec(2,2, figure=fig)
 
-        ax00 = fig.add_subplot(gs[0,0])
-        ax01 = fig.add_subplot(gs[0,1])
+        ax00 = fig.add_subplot(gs[0,:])
+        #ax01 = fig.add_subplot(gs[0,1])
 
         # --- Left plot: trajectory ---
         ax00.errorbar(x, y, yerr=std, fmt='-o', color='blue', ecolor='black', capsize=5, label='Cluster Trajectory')
@@ -106,22 +155,22 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         ax00.legend()
         ax00.grid(True)
 
-        # --- Right plot: categorical distributions ---
-        categorical_features = ['CR', 'PR', 'SD', 'PD']
-        counts = [np.sum(sub_cluster[rano_cols[-1]] == feat) for feat in categorical_features]
-        print(counts)
+        # # --- Right plot: categorical distributions ---
+        # categorical_features = ['CR', 'PR', 'SD', 'PD']
+        # counts = [np.sum(sub_cluster[rano_cols[-1]] == feat) for feat in categorical_features]
+        # print(counts)
 
-        # Bar plot layout
-        for j, (feature, count_series) in enumerate(zip(categorical_features, counts)):
-            ax01.barh(
-                f"{feature}: {count_series}",
-                count_series,
-                label=feature
-            )
+        # # Bar plot layout
+        # for j, (feature, count_series) in enumerate(zip(categorical_features, counts)):
+        #     ax01.barh(
+        #         f"{feature}: {count_series}",
+        #         count_series,
+        #         label=feature
+        #     )
 
-        ax01.set_title('1 Year RANO Response Distribution [volumetric]')
-        ax01.legend()
-        ax01.grid(True)
+        # ax01.set_title('1 Year RANO Response Distribution [volumetric]')
+        # ax01.legend()
+        # ax01.grid(True)
 
         ax10 = fig.add_subplot(gs[1,:])
 
@@ -175,3 +224,118 @@ def plot_umap(df, data_cols, path):
     plt.tight_layout()
     plt.savefig(path / 'UMAP_cluster_visualization.png')
     plt.clf()
+
+
+def plot_combined_trajectories(df, data_cols, label_col, path):
+    """
+    Creates a scatter plot of all trajectories in the set; trajectories of the same cluster share a color.
+    Visualization is clipped at 2 on Y for visibility.
+    Each cluster has its average trajectory drawn as a line plot.
+    Intended for direct comparison of clusters in one figure.
+    """
+    os.makedirs(path, exist_ok=True)
+
+    df.loc[:, '0'] = 1
+    data_cols = ['0']+data_cols
+
+    unique_labels = np.unique(df[label_col])
+    print('found unique labels:', unique_labels)
+
+    colors = sns.color_palette("hls", len(unique_labels))
+    plt.figure(figsize=(12, 6))
+
+    # Plot individual points
+    for i, label in enumerate(unique_labels):
+        cluster_df = df[df[label_col] == label]
+        for _, row in cluster_df.iterrows():
+            plt.scatter(data_cols, row[data_cols], color=colors[i], alpha=0.3, s=10)
+
+    # Plot average trajectory per cluster
+    for i, label in enumerate(unique_labels):
+        cluster_df = df[df[label_col] == label]
+        mean_traj = cluster_df[data_cols].mean(axis=0)
+        plt.plot(data_cols, mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label}')
+
+    plt.ylim(-0.1, 2)
+    plt.xlabel("Time")
+    plt.ylabel("Value")
+    plt.title("Combined Trajectories by Cluster")
+    plt.legend(loc="upper right")
+    plt.grid(True)
+    plt.tight_layout()
+
+    out_file = os.path.join(path, "combined_trajectories.png")
+    plt.savefig(out_file)
+    plt.close()
+
+def plot_recur_probs(df, rano_cols, label_col, path):
+    categories = ['CR', 'PR', 'PD', 'SD']
+
+    results = {}
+    for cat in categories:
+        print('= Analyzing category:', cat)
+        subset = df[df[rano_cols[0]]==cat]
+        ref = len(subset)
+        distribution = {}
+        sub = {}
+        for c in categories:
+            if c == cat:
+                sub[c] = ref
+            else: sub[c] = 0
+        distribution['t1'] = sub
+
+        print(f'= {cat} has {ref} instances at t1 = {rano_cols[0]} [days]')
+        for i in range(1, len(rano_cols)):
+            sub = {}
+            for c in categories:
+                sub[c] = len(subset[subset[rano_cols[i]] == c])
+            subset = subset[subset[rano_cols[i]] == cat]
+            print(f'== {cat} still has {sub[cat]} instances at t{i+1} = {rano_cols[i]} [days]')
+            distribution[f"t{i+1}"] = sub
+        
+        results[cat] = distribution
+
+    example_data = next(iter(results.values()))
+    timepoints = list(example_data.keys())
+    n_timepoints = len(timepoints)
+    
+    x = np.arange(n_timepoints)
+    bar_width = 0.2
+
+    fig, ax = plt.subplots(len(categories), 1, figsize=(14, 12), sharex=True, sharey=True)
+
+    all_bars = []
+
+    for idx, cat in enumerate(categories):
+        data = results[cat]
+        base_val = data['t1'][cat]  # normalizing against t1 for this category
+
+        prob_matrix = []
+        for c in categories:
+            probs = [data[timepoints[0]][c] / base_val]
+            for i, tp in enumerate(timepoints):
+                if i != 0:
+                    probs.append(data[tp][c] / data[timepoints[i-1]][cat])
+            prob_matrix.append(probs)
+
+        for j, c in enumerate(categories):
+            bars = ax[idx].bar(x + j * bar_width, prob_matrix[j], width=bar_width, label=c if idx == 0 else "")
+            if idx == 0:
+                all_bars.append(bars[0])
+
+        ax[idx].set_title(f"Probabilities given category {cat}")
+        ax[idx].grid(axis='y', linestyle='--', alpha=0.5)
+
+    ax[-1].set_xticks(x + bar_width * 1.5)
+    ax[-1].set_xticklabels([f"{tp} ({(i+1)*60}d)" for i, tp in enumerate(timepoints)])
+
+    fig.suptitle("Recurrence Probabilities by Initial Category", fontsize=18)
+    fig.text(0.04, 0.5, "Category change probability after spending all previous timepoints in the same Category", va='center', rotation='vertical', fontsize=14)
+    fig.legend(all_bars, categories, loc='upper right', fontsize=12)
+    fig.tight_layout(rect=[0.05, 0.05, 0.95, 0.95])
+
+    os.makedirs(path, exist_ok=True)
+    out_file = os.path.join(path, "probabilities.png")
+    fig.savefig(out_file)
+    plt.close(fig)
+
