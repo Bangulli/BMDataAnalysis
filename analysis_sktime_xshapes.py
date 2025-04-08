@@ -1,11 +1,12 @@
 import pandas as pd
 import sklearn
 from sklearn.cluster import MeanShift, KMeans, DBSCAN, HDBSCAN, OPTICS
-
+from sktime.datatypes import convert_to
 import pathlib as pl
-
+from sktime.clustering.k_shapes import TimeSeriesKShapes
 import numpy as np
 import os
+import copy
 from visualization import *
 from clustering import *
 from stepmix.stepmix import StepMix
@@ -14,7 +15,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
-    method_name = 'stepmix'
+    method_name = 'tsxshapes'
     folder_name = 'csv_linear_multiclass_reseg_only_valid'
     volume_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/volumes.csv', index_col=None)
     rano_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/rano.csv', index_col=None)
@@ -25,7 +26,7 @@ if __name__ == '__main__':
     
     output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_')
 
-    k = range(2, 42)
+    k = 42
     
     ## load volume data
     data_cols = ["60", "120", "180", "240", "300", "360"]
@@ -36,36 +37,16 @@ if __name__ == '__main__':
     complete_data[data_cols] = complete_data[data_cols].div(complete_data["0"], axis=0)
 
     ##### ------------------ MAKE CHANGES HERE -------------------------------------
-    ## Do the clustering
-    if not isinstance(k, int):
-        best_cluster = None
-        best_aic = np.inf
-        best_bic = np.inf
-        best_k = 1
-        for c_k in k:
-            cluster = StepMix(n_components=c_k, measurement='continuous', structural='continuous', random_state=42)
-            cluster.fit(complete_data[data_cols])
+    fmt = wide_df_to_3d_np(copy.deepcopy(complete_data[data_cols]))
+    best_cluster = TimeSeriesXShapes(k_max=k)
+    best_cluster, best_k = best_cluster.fit(fmt)
 
-            aic = cluster.aic(complete_data[data_cols])
-            bic = cluster.bic(complete_data[data_cols])
-            print(f'Output achieved an AIC of {aic} and a BIC of {bic}')
-
-            if best_aic > aic and best_bic > bic:
-                best_bic = bic
-                best_aic = aic
-                best_cluster = cluster
-                best_k = c_k
-                print('updated best k', best_k)
-    else:
-        best_cluster = StepMix(n_components=k, measurement='continuous', structural='continuous', random_state=42)
-        best_cluster.fit(complete_data[data_cols])
-        best_k = k
-        best_aic = best_cluster.aic(complete_data[data_cols])
-        best_bic = best_cluster.bic(complete_data[data_cols])
+    best_bic, best_aic = good_approx_bic_aic(complete_data[data_cols], best_cluster.labels_, best_k)
+    
     ##### ------------------ MAKE CHANGES HERE -------------------------------------
 
 
-    labels = best_cluster.predict(complete_data[data_cols])
+    labels = best_cluster.labels_
 
     complete_data['cluster'] = labels
     print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')

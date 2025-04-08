@@ -60,9 +60,7 @@ def plot_sankey(df, path, use_tempdir=False):
             value.append(count)
             link_colors.append(base_colors.get(cat, 'gray'))
 
-    [print(l, v) for l, v in zip(labels, value)]
-    print(labels)
-    print(value)
+
     # 🔹 T1 → T2, T2 → T3, ... regular links
     for i in range(n_timepoints - 1):
         from_tp = df.columns[i]
@@ -79,7 +77,7 @@ def plot_sankey(df, path, use_tempdir=False):
                 value.append(row['count'])
                 link_colors.append(base_colors.get(row[from_tp], "gray"))
 
-    labels = [f"{l}={value[i]}" for i, l in enumerate(labels)]
+    #labels = [f"{l}={value[i]}" for i, l in enumerate(labels)]
 
 
     # Create Sankey
@@ -113,8 +111,6 @@ def plot_sankey(df, path, use_tempdir=False):
 
 def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluster", init_col="0"):
     os.makedirs(output_dir, exist_ok=True)
-    df.loc[:, '0'] = 1
-    data_cols = ['0']+data_cols
     unique_labels = np.unique(df[label_col])
     print('found unique labels:', unique_labels)
     c_centers = np.zeros((len(unique_labels), len(data_cols)))
@@ -129,10 +125,13 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         
         sub_cluster = df[df[label_col] == i]
         cluster_meta['#Members'] = len(sub_cluster)
-        var = np.var(sub_cluster[data_cols], axis=0)
-        std = np.std(sub_cluster[data_cols], axis=0)
         init_vol = np.mean(sub_cluster[init_col])
         init_std = np.std(sub_cluster[init_col])
+
+        sub_cluster.loc[:, '0']= 0
+        var = np.var(sub_cluster[data_cols], axis=0)
+        std = np.std(sub_cluster[data_cols], axis=0)
+
         cluster_meta['Variances'] = var
         cluster_meta['StdDeviations'] = std
         cluster_meta['MemberIDs'] = list(sub_cluster['Lesion ID'])
@@ -307,27 +306,44 @@ def plot_recur_probs(df, rano_cols, label_col, path):
     all_bars = []
 
     for idx, cat in enumerate(categories):
+        counts_per_tp = []
         data = results[cat]
         base_val = data['t1'][cat]  # normalizing against t1 for this category
 
+        for tp in timepoints:
+            counts_per_tp.append(np.asarray(list(data[tp].values())).sum())
+
         prob_matrix = []
         for c in categories:
+            
             probs = [data[timepoints[0]][c] / base_val]
             for i, tp in enumerate(timepoints):
                 if i != 0:
                     probs.append(data[tp][c] / data[timepoints[i-1]][cat])
             prob_matrix.append(probs)
 
+
         for j, c in enumerate(categories):
             bars = ax[idx].bar(x + j * bar_width, prob_matrix[j], width=bar_width, label=c if idx == 0 else "")
             if idx == 0:
                 all_bars.append(bars[0])
 
+        # Annotate with number of lesions
+        for j, n_lesions in enumerate(counts_per_tp):
+            ax[idx].text(
+                x[j] + bar_width * 2,  # center under the bars
+                -0.05,  # just below x-axis
+                f"n={n_lesions}",
+                ha='center',
+                va='top',
+                fontsize=10
+            )
+
         ax[idx].set_title(f"Probabilities given category {cat}")
         ax[idx].grid(axis='y', linestyle='--', alpha=0.5)
 
     ax[-1].set_xticks(x + bar_width * 1.5)
-    ax[-1].set_xticklabels([f"{tp} ({(i+1)*60}d)" for i, tp in enumerate(timepoints)])
+    ax[-1].set_xticklabels([f"\n{tp} ({(i+1)*60}d)" for i, tp in enumerate(timepoints)])
 
     fig.suptitle("Recurrence Probabilities by Initial Category", fontsize=18)
     fig.text(0.04, 0.5, "Category change probability after spending all previous timepoints in the same Category", va='center', rotation='vertical', fontsize=14)
@@ -339,3 +355,101 @@ def plot_recur_probs(df, rano_cols, label_col, path):
     fig.savefig(out_file)
     plt.close(fig)
 
+
+def plot_recur_probs_noncausal(df, rano_cols, path):
+    categories = ['CR', 'PR', 'PD', 'SD']
+
+    # Define consistent colors per category
+    category_colors = {
+        'CR': '#1f77b4',  # blue
+        'PR': '#ff7f0e',  # orange
+        'PD': '#2ca02c',  # green
+        'SD': '#d62728',  # red
+    }
+
+    # Initialize result dict
+    results = {cat: {f"t{i+1}": {c: 0 for c in categories} for i in range(6)} for cat in categories}
+
+    # Fill result dict
+    for _, row in df[rano_cols].iterrows():
+        row = row.to_list()
+        ref = None
+        count = 0
+        for idx, value in enumerate(row):
+            if count == 0:
+                ref = value
+                count += 1
+                results[ref][f"t{count}"][value] += 1
+            elif ref == value:
+                count += 1
+                results[ref][f"t{count}"][value] += 1
+            else:
+                results[ref][f"t{count+1}"][value] += 1
+                ref = value
+                count = 0
+
+    # Plotting
+    timepoints = list(next(iter(results.values())).keys())
+    n_timepoints = len(timepoints)
+    x = np.arange(n_timepoints)
+    bar_width = 0.2
+
+    fig, ax = plt.subplots(len(categories), 1, figsize=(14, 12), sharex=True, sharey=True)
+    all_bars = []
+
+    for idx, cat in enumerate(categories):
+        prob_matrix = []
+        counts_per_tp = []  # for n=
+
+        data = results[cat]
+        for tp in timepoints:
+            probs = np.asarray(list(data[tp].values()))
+            n = probs.sum()
+            counts_per_tp.append(n)
+            probs = list(probs / n) if n > 0 else [0] * len(categories)
+            prob_matrix.append(probs)
+
+        # Plot bars with consistent colors
+        for j, tp in enumerate(timepoints):
+            probs = prob_matrix[j]
+            for k, c in enumerate(categories):
+                bar = ax[idx].bar(
+                    x[j] + k * bar_width,
+                    probs[k],
+                    width=bar_width,
+                    color=category_colors[c],
+                    label=c if idx == 0 and j == 0 else ""
+                )
+                if idx == 0 and j == 0:
+                    all_bars.append(bar[0])
+
+        # Annotate with number of lesions
+        for j, n_lesions in enumerate(counts_per_tp):
+            ax[idx].text(
+                x[j] + bar_width * 2,  # center under the bars
+                -0.05,  # just below x-axis
+                f"n={n_lesions}",
+                ha='center',
+                va='top',
+                fontsize=10
+            )
+
+        ax[idx].set_title(f"Probabilities given category {cat}")
+        ax[idx].grid(axis='y', linestyle='--', alpha=0.5)
+
+    # X-axis ticks
+    ax[-1].set_xticks(x + bar_width * 1.5)
+    ax[-1].set_xticklabels([f"\n{tp} ({(i+1)*60}d)" for i, tp in enumerate(timepoints)])
+
+    # Global labels
+    fig.suptitle("Recurrence Probabilities by Initial Category", fontsize=18)
+    fig.text(0.04, 0.5, "Category change probability after spending all previous timepoints in the same Category", 
+             va='center', rotation='vertical', fontsize=14)
+    fig.legend(all_bars, categories, loc='upper right', fontsize=12)
+    fig.tight_layout(rect=[0.05, 0.05, 0.95, 0.95])
+
+    # Save figure
+    os.makedirs(path, exist_ok=True)
+    out_file = os.path.join(path, "probabilities_noncausal.png")
+    fig.savefig(out_file)
+    plt.close(fig)

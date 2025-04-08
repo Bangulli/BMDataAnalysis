@@ -5,6 +5,12 @@ import rpy2.robjects.packages as rpackages
 from rpy2.robjects.conversion import localconverter
 from sklearn.base import BaseEstimator, ClusterMixin
 from .utils import wide_to_long
+from rpy2.robjects.packages import importr
+from rpy2.robjects import Formula
+from rpy2.robjects.vectors import StrVector
+from rpy2.robjects import globalenv
+from rpy2.robjects.vectors import IntVector
+
 
 
 class HLMEClusterer(BaseEstimator, ClusterMixin):
@@ -12,33 +18,51 @@ class HLMEClusterer(BaseEstimator, ClusterMixin):
         self.n_components = n_components
         self.model = None
         self.posteriors_ = None
-        self.lcmm = rpackages.importr('lcmm')
+        self.base = importr('base')
+        self.lcmm = importr('lcmm')
+        self.gs = importr('lcmm').gridsearch
 
     def fit(self, X, y=None):
+        X = wide_to_long(X)
+        X['time'] /= 360
+        print(X)
         # Expect X to be a pandas DataFrame with columns: subject, time, value
         with localconverter(robjects.default_converter + pandas2ri.converter):
-            rdf = pandas2ri.py2rpy(wide_to_long(X))
+            rdf = pandas2ri.py2rpy(X)
 
         r.assign("rdf", rdf)
 
         init = self.lcmm.hlme(
-            fixed = robjects.Formula('value ~ time'),
-            random = robjects.Formula('~ time'),
+            fixed = Formula('value ~ time'),
+            random = Formula('~ 1'),
             subject = 'subject',
             ng = 1,
-            data = rdf
-        )
-
-        self.model = self.lcmm.hlme(
-            fixed = robjects.Formula('value ~ time'),
-            mixture = robjects.Formula('~ time'),
-            random = robjects.Formula('~ time'),
-            subject = 'subject',
-            ng = self.n_components,
             data = rdf,
-            B = init
+        )
+        print(f"Initialization model converged: {init.rx2("conv")}")
+
+        # Step 2: Create the unevaluated R expression for the model
+        r_expr = robjects.r(f'''
+            quote(
+                hlme(fixed = value ~ time,
+                    mixture = ~1,
+                    random = ~1,
+                    subject = "subject",
+                    ng = {self.n_components},
+                    data = rdf,
+                    nwg = FALSE)
+            )
+        ''')
+
+        # Step 3: Run gridsearch with unevaluated R expression
+        self.model = self.gs(
+            m=r_expr,           # pass the quoted model expression
+            rep=100,
+            maxiter=500,
+            minit=init
         )
 
+        print(f"Initialization model converged: {self.model.rx2("conv")}")
         # Store posteriors
         self.posteriors_ = self.model.rx2('pprob')
 
@@ -55,64 +79,65 @@ class HLMEClusterer(BaseEstimator, ClusterMixin):
         return 0
 
 
-def run_hlme(df):
-    utils = rpackages.importr('utils')
-    utils.chooseCRANmirror(ind=1)  # Choose first CRAN mirror
+class LCMMClusterer(BaseEstimator, ClusterMixin):
+    def __init__(self, n_components=2):
+        self.n_components = n_components
+        self.model = None
+        self.posteriors_ = None
+        self.base = importr("base")
+        self.lcmm = importr('lcmm')
+        self.gs = importr('lcmm').gridsearch
 
-    # Install lcmm (or any other R package)
-    package_name = 'lcmm'
-    if not rpackages.isinstalled(package_name):
-        utils.install_packages(package_name)
+    def fit(self, X, y=None):
+        X = wide_to_long(X)
+        X["time"] /= 360
 
-    with localconverter(robjects.default_converter + pandas2ri.converter):
-        rdf = robjects.conversion.py2rpy(wide_to_long(df))
+        with localconverter(robjects.default_converter + pandas2ri.converter):
+            rdf = pandas2ri.py2rpy(X)
 
-    r.assign("rdf", rdf)  
+        r.assign("rdf", rdf)
 
-    r('''
-        model <- hlme(fixed = value ~ time,
-                    random = ~ time,
-                    subject = 'subject',
-                    ng = 2,
-                    data = rdf)
+        # Step 1: Initial model with ng=1
+        init = self.lcmm.lcmm(
+            fixed=robjects.Formula("value ~ 1 + time"),
+            random=robjects.Formula("~ 1"),
+            subject="subject",
+            ng=1,
+            data=rdf
+        )
+        print(f"Initialization model converged: {init.rx2('conv')}")
 
-        summary(model)
-        ''')
+        base = importr("base")
+
+        model_call = base.call(
+            "lcmm",
+            fixed=Formula("value ~ 1 + time"),
+            mixture=Formula("~ 1"),
+            random=Formula("~ 1"),
+            subject="subject",
+            ng=self.n_components,
+            data=r["rdf"],
+            nwg=False,
+            link="5-quant-splines"
+        )
+        # Step 3: Run gridsearch
+        self.model = self.gs(
+            m=model_call,
+            rep=100,
+            maxiter=500,
+            minit=init
+        )
+
+        print(f"Final model convergence status: {self.model.rx2('conv')}")
+        self.posteriors_ = self.model.rx2('pprob')
+        return self
+
+
+    def predict(self, X):
+        # Return most likely class for each subject
+        with localconverter(robjects.default_converter + pandas2ri.converter):
+            post = pandas2ri.rpy2py(self.posteriors_)
+        return post['class'].values
     
-    posteriors = r('model$pprob')
-
-    with localconverter(robjects.default_converter + pandas2ri.converter):
-        posteriors_df = robjects.conversion.rpy2py(posteriors)
-
-    return posteriors_df
-
-def run_lcmm(df):
-    utils = rpackages.importr('utils')
-    utils.chooseCRANmirror(ind=1)  # Choose first CRAN mirror
-
-    # Install lcmm (or any other R package)
-    package_name = 'lcmm'
-    if not rpackages.isinstalled(package_name):
-        utils.install_packages(package_name)
-
-    with localconverter(robjects.default_converter + pandas2ri.converter):
-        rdf = robjects.conversion.py2rpy(wide_to_long(df))
-
-    r.assign("rdf", rdf)  
-
-    r('''
-        model <- lcmm(fixed = value ~ time,
-                    random = ~ time,
-                    subject = 'subject',
-                    ng = 2,
-                    data = rdf)
-
-        summary(model)
-        ''')
-    
-    posteriors = r('model$pprob')
-
-    with localconverter(robjects.default_converter + pandas2ri.converter):
-        posteriors_df = robjects.conversion.rpy2py(posteriors)
-
-    return posteriors_df
+    def score(self, X, y):
+        return 0
