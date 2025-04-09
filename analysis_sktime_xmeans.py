@@ -6,6 +6,7 @@ import pathlib as pl
 from sktime.clustering.k_means import TimeSeriesKMeans
 import numpy as np
 import os
+from data import get_derivatives
 import copy
 from visualization import *
 from clustering import *
@@ -17,6 +18,7 @@ warnings.filterwarnings('ignore')
 if __name__ == '__main__':
     method_name = 'tsxmeans_euc'
     folder_name = 'csv_linear_multiclass_reseg_only_valid'
+    use_derivatives = True
     volume_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/volumes.csv', index_col=None)
     rano_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/rano.csv', index_col=None)
     renamer = {elem: 'rano-'+elem for elem in rano_data.columns}
@@ -36,8 +38,21 @@ if __name__ == '__main__':
     # Normalize by t0 Volume
     complete_data[data_cols] = complete_data[data_cols].div(complete_data["0"], axis=0)
 
+    if use_derivatives:
+        derivatives = get_derivatives(complete_data[["0"]+data_cols], 'sobel', 'constant', 'relative')
+
+        complete_data = pd.concat([complete_data, derivatives], axis=1)
+
+        derivative_cols = list(derivatives.columns)
+
     ##### ------------------ MAKE CHANGES HERE -------------------------------------
     fmt = wide_df_to_3d_np(copy.deepcopy(complete_data[data_cols]))
+
+    drv = wide_df_to_3d_np(copy.deepcopy(derivatives))
+
+    fmt = np.concatenate((fmt, drv), axis=-1)
+
+
     best_cluster = TimeSeriesXMeans(k_max=k, metric='euclidean')
     best_cluster, best_k = best_cluster.fit(fmt)
 
@@ -55,6 +70,10 @@ if __name__ == '__main__':
 
     DB_score = sklearn.metrics.davies_bouldin_score(complete_data[data_cols], complete_data['cluster'])
     print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')
+
+    if use_derivatives:
+        output = output.parent.parent/(output.parent.name+'_deriv')/output.name
+        data_cols = ["60", "120", "180", "240", "300", "360"] # overwrite the columns so it plots just the trajectory not the derivatives
 
     output = output.parent/(output.name+str(best_k))
 

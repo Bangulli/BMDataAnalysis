@@ -3,7 +3,7 @@ import sklearn
 from sklearn.cluster import MeanShift, KMeans, DBSCAN, HDBSCAN, OPTICS
 
 import pathlib as pl
-
+from data import get_derivatives
 import numpy as np
 import os
 from visualization import *
@@ -16,6 +16,8 @@ warnings.filterwarnings('ignore')
 if __name__ == '__main__':
     method_name = 'stepmix'
     folder_name = 'csv_linear_multiclass_reseg_only_valid'
+    use_derivatives = True
+
     volume_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/volumes.csv', index_col=None)
     rano_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/rano.csv', index_col=None)
     renamer = {elem: 'rano-'+elem for elem in rano_data.columns}
@@ -34,6 +36,15 @@ if __name__ == '__main__':
     
     # Normalize by t0 Volume
     complete_data[data_cols] = complete_data[data_cols].div(complete_data["0"], axis=0)
+
+    if use_derivatives:
+        derivatives = get_derivatives(complete_data[["0"]+data_cols], 'sobel', 'constant', 'relative')
+
+        complete_data = pd.concat([complete_data, derivatives], axis=1)
+
+        data_cols = list(derivatives.columns)+data_cols
+
+
 
     ##### ------------------ MAKE CHANGES HERE -------------------------------------
     ## Do the clustering
@@ -74,6 +85,10 @@ if __name__ == '__main__':
 
     DB_score = sklearn.metrics.davies_bouldin_score(complete_data[data_cols], complete_data['cluster'])
     print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')
+
+    if use_derivatives:
+        output = output.parent.parent/(output.parent.name+'_deriv')/output.name
+        data_cols = ["60", "120", "180", "240", "300", "360"] # overwrite the columns so it plots just the trajectory not the derivatives
 
     output = output.parent/(output.name+str(best_k))
 
