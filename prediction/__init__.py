@@ -1,1 +1,2 @@
-from .sweep_prediction import *
+from .sweep_regression import train_regression_model_sweep
+from .sweep_classification import train_classification_model_sweep

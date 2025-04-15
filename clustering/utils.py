@@ -20,7 +20,7 @@ def filter_small_clusters(df, cluster_column, min_member_count):
     print(f"left with {len(valid_labels)} clusters")
     print(f"removed clusters {len(invalid_labels)} for not meeting the minimum member requirement {min_member_count}, totalling {np.sum([np.sum(df[cluster_column]==l) for l in invalid_labels])} metastsases")
     print(f"kept {valid_labels}, removed {invalid_labels}")
-    return df_filtered
+    return df_filtered, invalid_labels
 
 def wide_df_to_sktime_multiindex(df_wide):
     # df_wide: wide format with rows = subjects, cols = timepoints

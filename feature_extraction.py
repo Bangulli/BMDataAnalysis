@@ -19,19 +19,17 @@ import os
 import pandas as pd
 from PrettyPrint import *
 import ast
+from visualization import *
 
 if __name__ == '__main__':
-    dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch')
-    met_path = pl.Path('/mnt/nas6/data/Target/task_502_PARSED_METS_mrct1000_nobatch')
-    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/502/metrics.csv')
-    match_report = pd.read_csv(match_report, sep=';', index_col=None)
-    folder_name = 'csv_linear_502_reseg_only_valid'
+    met_path = pl.Path('/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch') # location of preparsed metastases
+    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/504-524/metrics.csv') # location of matching report csv to filter out unmatched lesions
+    match_report = pd.read_csv(match_report, sep=';', index_col=None) 
+    folder_name = 'csv_linear_multiclass_reseg_only_valid' # folder in which the output is stored in the met_path directory
     os.makedirs(met_path/folder_name)
 
 
-    pats = [pat for pat in os.listdir(dataset_path) if pat.startswith('sub-PAT')]
     parsed = [pat for pat in os.listdir(met_path) if pat.startswith('sub-PAT')]
-    pats = [pat for pat in pats if pat not in parsed]
 
     ## load mets from preparsed store
     met_dicts = []
@@ -48,7 +46,7 @@ if __name__ == '__main__':
 
             if p:
                 p.discard_unmatched(list(matched_mets.values()))
-                p.resample_all_timeseries(360, 6, 'linear')
+                p.resample_all_timeseries(360, 6, 'nearest')
             
                 rano_dicts += p.lesion_wise_rano()
                 met_dicts += p.to_dicts()
@@ -74,4 +72,6 @@ if __name__ == '__main__':
             print(d)
             writer.writerow(d)
         
+    df = pd.read_csv(met_path/folder_name/'rano.csv')
+    plot_sankey(df, met_path/folder_name)
    

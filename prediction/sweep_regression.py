@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
-def train_model_sweep(model, df_train, df_test, verbose=True, data_cols=None, rano_cols=None):
+def train_regression_model_sweep(model, df_train, df_test, verbose=True, data_cols=None, rano_cols=None):
     """
     Trains a sweep set of models to provided data.
     sweep == sweeps over the set and trains multiple possible configurations by training different feature configs to predict the next in time and 1 year response
@@ -70,6 +70,14 @@ def quantity_assessment(gt, pd, input):
     res = {}
     rano_gt, rano_pd = assign_rano(input, gt, pd)
 
+    # compute class weights
+    weights = {u: len(rano_gt)/np.sum(rano_gt==u) for u in np.unique(rano_gt)}
+    #print(weights)
+    # make weight vector
+    weights = [weights[l] for l in rano_gt]
+    # is equivalent to sklearn.utils.class_weight.compute_sample_weight
+
+    res['balanced_accuracy'] = sklearn.metrics.accuracy_score(rano_gt, rano_pd, sample_weight=weights)
     res['accuracy'] = sklearn.metrics.accuracy_score(rano_gt, rano_pd)
     #res['roc_auc'] = sklearn.metrics.roc_auc_score(rano_gt, rano_pd, multi_class='ovr')
     res['f1'] = sklearn.metrics.f1_score(rano_gt, rano_pd, average='weighted')

@@ -7,12 +7,13 @@ from sktime.clustering.k_shapes import TimeSeriesKShapes
    
 
 class TimeSeriesXShapes():
-    def __init__(self, metric='dtw', k_max=42):
+    def __init__(self, metric='dtw', k_max=42, random_seed=42):
         self.metric = metric
         self.k_max = k_max
+        self.random_seed = random_seed
         
     def fit(self, X, y=None):
-        clusterer = TimeSeriesKShapes(2)
+        clusterer = TimeSeriesKShapes(2, random_state=self.random_seed)
         clusterer.fit(X)
         k = 3
         while k <= self.k_max:
@@ -21,7 +22,7 @@ class TimeSeriesXShapes():
                 return clusterer, k
             else:
                 k = len(init)
-                clusterer = TimeSeriesKShapes(k, init)
+                clusterer = TimeSeriesKShapes(k, init, random_state=self.random_seed)
                 clusterer.fit(X)
         return clusterer, k
 
@@ -38,7 +39,7 @@ class TimeSeriesXShapes():
             subset = np.asarray(X[clusterer.labels_ == k, ...])
             bic_1 = self._heavy_bic(subset, subset_labels, 1)
             # compute cluster bic for 2 center using 2means
-            k2_means = TimeSeriesKShapes(2)
+            k2_means = TimeSeriesKShapes(2, random_state=self.random_seed)
             k2_means.fit(subset)
             bic_2 = self._heavy_bic(subset, k2_means.labels_, 2)
             if (bic_2-bic_1)>tol:

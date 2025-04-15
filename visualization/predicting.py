@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 
-def plot_regression_metrics(results, output, next_value_prefix = 'nxt', one_year_prefix = '1yr'):
+def plot_prediction_metrics(results, output, next_value_prefix = 'nxt', one_year_prefix = '1yr'):
     os.makedirs(output, exist_ok=True)
 
     nxts = [results[d] for d in list(results.keys()) if d.startswith(next_value_prefix)]
