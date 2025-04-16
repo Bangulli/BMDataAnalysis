@@ -181,7 +181,7 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
 
 
         # --- Shared plot settings ---
-        fig.suptitle(f"Members = {cluster_meta["#Members"]}, Init Vol = {init_vol:.1f} ± {init_std:.1f} [mm³]", fontsize=16)
+        fig.suptitle(f"""Members = {cluster_meta["#Members"]}, Init Vol = {init_vol:.1f} ± {init_std:.1f} [mm³]""", fontsize=16)
         fig.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space for suptitle
         fig.savefig(output_dir / f'trajectory_cluster_{i}.png')
         plt.clf()

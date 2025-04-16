@@ -93,58 +93,49 @@ class Patient():
         """
         self.mets = [met.resample(timeframe_days, timepoints, method) for met in self.mets]
 
-####### Conversion utilities      
-    def to_numpy(self):
-        """
-        Returns a numpy array where the columns are the timepoints and the rows are the metastses
-        """
-        raise NotImplementedError('WIP')
-        return
-    
-    def to_df(self):
-        """
-        Returns a pandas DataFrame where the columns are the timepoints and the rows are the metastases
-        Column names are t0, t30, ... where the bumber is the difference in days from t0 at the current timepoint
-        """
-        raise NotImplementedError('WIP')
-        return
-    
-    def to_csv(self, path: pl.Path):
-        """
-        Saves the metastasis dataframe from self.to_df as a csv file and stores a supplementary csv with patient metadata
-        """
-        raise NotImplementedError('WIP')
-        return
-    
-    def to_dicts(self):
-        """
-        Returns a list of dictionaries to be written with the csv library for example
-        each dict is a time series
-        """
-        dict_list = []
-        for i, ts in enumerate(self.mets):
-            if ts is not None:
-                cur_dict = ts.dict()
-                id = f"{self.id}:{ts.id.split(' ')[-1]}"
-                cur_dict['Lesion ID'] = id
-                cur_dict['Brain Volume'] = self.brain_volume
-                dict_list.append(cur_dict)
-        return dict_list
-    
-    def lesion_wise_rano(self, mode='3d'):
-        dict_list = []
-        for i, ts in enumerate(self.mets):
-            if ts is not None:
-                cur_dict = ts.to_rano(mode)
-                id = f"{self.id}:{ts.id.split(' ')[-1]}"
-                cur_dict['Lesion ID'] = id
-                dict_list.append(cur_dict)
-        return dict_list
-    
     def discard_unmatched(self, matched:list):
         initial = len(self.mets)
         self.mets = [met for met in self.mets if met.id in matched]
         print(f"discarded {initial-len(self.mets)} metastases series, kept metastses: {[met.id for met in self.mets]}")
+
+####### GETTERS    
+    def get_features(self, features='all', get_keys=True):
+        """
+        Returns a list of dictionaries to be written with the csv library for example
+        each dict is a time series
+
+        :param features: can either be a string or a list of strings containing the features to extract for each lesion, optional, default 'all'
+        """
+        dict_list = []
+        keys = None
+        for i, ts in enumerate(self.mets):
+            if ts is not None:
+                cur_dict = {}
+
+                if isinstance(features, str):
+                    features = [features]
+
+                for feature in features:
+                    if feature in ['all', 'volume']:
+                        cur_dict = {**cur_dict, **ts.get_volume(), 'Brain Volume': self.brain_volume}
+                    
+                    if feature in ['all', 'rano']:
+                        cur_dict = {**cur_dict, **ts.get_rano('3d')}
+
+                    if feature in ['all', 'radiomics']:
+                        cur_dict = {**cur_dict, **ts.get_radiomics()}
+
+                
+
+                id = f"{self.id}:{ts.id.split(' ')[-1]}"
+                cur_dict['Lesion ID'] = id
+                dict_list.append(cur_dict)
+
+                if keys is None:
+                    keys = list(cur_dict.keys())
+
+        if get_keys: return dict_list, keys
+        else: return dict_list
 
 ####### Private internal utils
     def _sort_directories(self, dirs, pattern): # courtesy of chatgpt
@@ -222,7 +213,10 @@ class Patient():
 
             if n_labels != 0: # check whether there even are labels at the timepoint
                 for label in range(1, n_labels+1):
-                    met = sitk.GetImageFromArray((label_arr == label).astype(int))
+                    cur_arr = np.zeros_like(label_arr)
+                    cur_arr[label_arr==label]=1
+
+                    met = sitk.GetImageFromArray(cur_arr.astype(int))
                     met.CopyInformation(mask)
                     mets.append(
                         Metastasis(

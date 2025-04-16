@@ -3,6 +3,7 @@ import numpy as np
 import copy
 import os
 import pathlib as pl
+from radiomics import featureextractor
 
 def generate_empty_met_from_met(met):
     emet = EmptyMetastasis()
@@ -139,6 +140,15 @@ class Metastasis():
             self.lesion_size_voxel = np.sum(self.image)
             self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
 
+    def get_t1_radiomics(self):
+        if self.t1_path is not None:
+            extractor = featureextractor.RadiomicsFeatureExtractor()
+            extractor.enableAllFeatures()
+            print(type(self.sitk), self.t1_path)
+            t1_radiomics = extractor.execute(str(self.t1_path), self.sitk)
+            return t1_radiomics
+        else: return False
+        
 
 
 class InterpolatedMetastasis(Metastasis):

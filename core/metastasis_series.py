@@ -9,6 +9,7 @@ import pathlib as pl
 from PrettyPrint import *
 from scipy.interpolate import make_interp_spline, BSpline
 import matplotlib.pyplot as plt
+from collections.abc import Iterable
 
 #### Global utility functions
 def parse_to_timeseries(mets_dict: dict, dates_dict: dict, treatments_dict:dict, log: Printer=Printer()):
@@ -226,12 +227,12 @@ class MetastasisTimeSeries():
         if method == 'nearest': 
             t0 = self[0]
             tps = self._generate_timepoints(t0[1], timeframe_days, timepoints)
-            new_series = MetastasisTimeSeries(generate_interpolated_met_from_met(t0[0]), t0[1], t0[2], self.id)
+            new_series = MetastasisTimeSeries(t0[0], t0[1], t0[2], self.id)
             for i, tp in enumerate(list(tps.keys())):
                 if i == 0:
                     continue
                 closest_met_key, _ = self._find_closest_entry(tps[tp])
-                new_series.append(generate_interpolated_met_from_met(self.time_series[closest_met_key]), tps[tp], tp)
+                new_series.append(self.time_series[closest_met_key], tps[tp], tp)
             return new_series
         
         ## linear interpolation
@@ -313,7 +314,8 @@ class MetastasisTimeSeries():
             if self.time_series[k] is not None:
                 print(f"    t{i}: {str(self.time_series[k])}, date = {self.dates[k]}")
 
-    def to_rano(self, mode='3d'):
+####### GETTERS
+    def get_rano(self, mode='3d'):
         """
         computes a dictionary of rano classifications for each timepoint 
         """
@@ -329,12 +331,63 @@ class MetastasisTimeSeries():
         nadir = max(nadir, 1e-6) # avoid division by zero error
         nadir = min(nadir, baseline) # overrule nadir with baseline if it is smaller
         rano_dict = {}
-        rano_dict[0] = None
+        rano_dict['rano_0'] = None
         for i, d in enumerate(self.keys):
             if i == 0:
                 continue
-            rano_dict[int((self.dates[d]-self.dates[self.keys[0]]).days)] = self.time_series[d].rano(baseline, nadir, mode)
+            rano_dict['rano_'+str(int((self.dates[d]-self.dates[self.keys[0]]).days))] = self.time_series[d].rano(baseline, nadir, mode)
         return rano_dict
+    
+    def get_radiomics(self):
+        """
+        computes a dictionary of radiomics features for each timepoint 
+        """
+        radio_dict = {}
+        ref_dict = None
+        for i, d in enumerate(self.keys):
+
+            radiomics = self.time_series[d].get_t1_radiomics()
+            if ref_dict is None: ref_dict = copy.deepcopy(radiomics)
+            if radiomics:
+                key = str(int((self.dates[d]-self.dates[self.keys[0]]).days))
+                prefix = f'radiomics_{key}_'
+                value_keys = [k for k in radiomics.keys() if not k.startswith('diagnostics')]
+                for v_k in value_keys:
+                    value = radiomics[v_k]
+                    value = value.item() if isinstance(value, np.ndarray) and value.shape == () else value
+                    if isinstance(value, Iterable):
+                        for i, v in enumerate(value):
+                            radio_dict[prefix+v_k+f'_{i}'] = v
+
+                    else:
+                        radio_dict[prefix+v_k] = value
+            else:
+                key = str(int((self.dates[d]-self.dates[self.keys[0]]).days))
+                prefix = f'radiomics_{key}_'
+                value_keys = [k for k in ref_dict.keys() if not k.startswith('diagnostics')]
+                for v_k in value_keys:
+                    value = ref_dict[v_k]
+                    value = value.item() if isinstance(value, np.ndarray) and value.shape == () else value
+                    if isinstance(value, Iterable):
+                        for i, v in enumerate(value):
+                            radio_dict[prefix+v_k+f'_{i}'] = ''
+
+                    else:
+                        radio_dict[prefix+v_k] = ''
+        return radio_dict
+
+    def get_volume(self):
+        """
+        wraps the python dict cast
+        Returns a dictionary of delta_t as keys and lesion volume as values
+        """
+        value_dict = {}
+        value_dict[0] = self.time_series[self.keys[0]].lesion_volume
+        for i, d in enumerate(self.keys):
+            if i == 0:
+                continue
+            value_dict[int((self.dates[d]-self.dates[self.keys[0]]).days)] = self.time_series[d].lesion_volume
+        return value_dict
 
 
 ######## Builtins  
@@ -350,19 +403,6 @@ class MetastasisTimeSeries():
         Returns a list of lesion volumes
         """
         return [self.time_series[met].lesion_volume for met in self.keys]
-    
-    def dict(self):
-        """
-        wraps the python dict cast
-        Returns a dictionary of delta_t as keys and lesion volume as values
-        """
-        value_dict = {}
-        value_dict[0] = self.time_series[self.keys[0]].lesion_volume
-        for i, d in enumerate(self.keys):
-            if i == 0:
-                continue
-            value_dict[int((self.dates[d]-self.dates[self.keys[0]]).days)] = self.time_series[d].lesion_volume
-        return value_dict
 
 ######## Visualization
     def plot_trajectory(self, path, xlabel='Delta T [days]', ylabel='Volume [mm³]', x_tick_offset=0, title='Metastis Volume Trajectory'):

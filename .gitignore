@@ -110,3 +110,5 @@ output/csv_linear_multiclass_reseg/stepmix_9/UMAP_cluster_visualization.png
 Anaconda3-2024.10-1-Linux-x86_64.sh
 output
 logs
+pkgs_clean.txt
+pkgs.txt

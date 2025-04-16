@@ -25,16 +25,14 @@ if __name__ == '__main__':
     met_path = pl.Path('/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch') # location of preparsed metastases
     match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/504-524/metrics.csv') # location of matching report csv to filter out unmatched lesions
     match_report = pd.read_csv(match_report, sep=';', index_col=None) 
-    folder_name = 'csv_linear_multiclass_reseg_only_valid' # folder in which the output is stored in the met_path directory
-    os.makedirs(met_path/folder_name)
+    folder_name = 'csv_nn_multiclass_reseg_only_valid' # folder in which the output is stored in the met_path directory
+    os.makedirs(met_path/folder_name, exist_ok=True)
 
 
     parsed = [pat for pat in os.listdir(met_path) if pat.startswith('sub-PAT')]
 
     ## load mets from preparsed store
-    met_dicts = []
-
-    rano_dicts = []
+    value_dicts = []
     for pat in parsed:
         print('== loading patient:', pat)
 
@@ -47,31 +45,26 @@ if __name__ == '__main__':
             if p:
                 p.discard_unmatched(list(matched_mets.values()))
                 p.resample_all_timeseries(360, 6, 'nearest')
+
+                v, keys = p.get_features('all')
             
-                rano_dicts += p.lesion_wise_rano()
-                met_dicts += p.to_dicts()
+                value_dicts += v
+
             else:
                 print('== failed to load patient:', pat)
         else:
             print("== found no matching metastases for patient, skipped")
 
 
-    with open(met_path/folder_name/'volumes.csv', 'w') as file:
-        header = ['Lesion ID', 'Brain Volume', 0, 60, 120, 180, 240, 300, 360]
+    with open(met_path/folder_name/'features.csv', 'w') as file:
+        header = keys
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
-        for d in met_dicts:
-            print(d)
-            writer.writerow(d)
-
-    with open(met_path/folder_name/'rano.csv', 'w') as file:
-        header = ['Lesion ID', 0, 60, 120, 180, 240, 300, 360]
-        writer = csv.DictWriter(file, fieldnames=header)
-        writer.writeheader()
-        for d in rano_dicts:
+        for d in value_dicts:
             print(d)
             writer.writerow(d)
         
-    df = pd.read_csv(met_path/folder_name/'rano.csv')
-    plot_sankey(df, met_path/folder_name)
+    df = pd.read_csv(met_path/folder_name/'features.csv')
+    ranos = [k for k in df.columns if k.startswith('rano_')]
+    plot_sankey(df[ranos], met_path/folder_name)
    
