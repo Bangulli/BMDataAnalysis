@@ -192,7 +192,7 @@ class Patient():
         """
         Reads time series, seperates metastasis masks into unique entities and stores them in a dictionary with the same keys as studies, but each value is a list of metastais objects
         """
-        struct_el = ndimage.generate_binary_structure(rank=3, connectivity=2)
+        struct_el = ndimage.generate_binary_structure(rank=3, connectivity=3)
         mets_dict = {}
         treatments_dict = {}
         for date in self.dates:
@@ -208,16 +208,18 @@ class Patient():
             else: t2 = None
 
             mask_arr = sitk.GetArrayFromImage(mask)
-            #mask_arr = ndimage.binary_opening(mask_arr, struct_el)
+            mask_arr = ndimage.binary_closing(mask_arr, struct_el) # fill small holes in the foreground
+            mask_arr = ndimage.binary_opening(mask_arr, struct_el) # remove small foreground objects
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
 
             if n_labels != 0: # check whether there even are labels at the timepoint
                 for label in range(1, n_labels+1):
+                    # generate ROI mask
                     cur_arr = np.zeros_like(label_arr)
                     cur_arr[label_arr==label]=1
-
-                    met = sitk.GetImageFromArray(cur_arr.astype(int))
+                    met = sitk.GetImageFromArray(cur_arr.astype(np.uint8))
                     met.CopyInformation(mask)
+
                     mets.append(
                         Metastasis(
                             met, 

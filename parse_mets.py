@@ -7,8 +7,8 @@ import os
 from PrettyPrint import *
 
 if __name__ == '__main__':
-    dataset_path = pl.Path('/mnt/nas6/data/Target/batch_copy/rerun_test/processed')
-    met_path = pl.Path('/mnt/nas6/data/Target/batch_copy/rerun_test/parsed_3')
+    dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch')
+    met_path = pl.Path('/mnt/nas6/data/Target/task_524-504_REPARSED_METS_mrct1000_nobatch')
     
     os.makedirs(met_path, exist_ok=True)
 
@@ -21,15 +21,6 @@ if __name__ == '__main__':
     logger = Printer(log_type='txt')
     for pat in pats:
         print('== working on patient:', pat)
-        p = Patient(dataset_path/pat, log=logger, met_dir_name='mets_task504-524')
+        p = Patient(dataset_path/pat, log=logger, met_dir_name='mets')
         p.print()
         p.save(met_path)
-
-    # ## loads preparsed metastases
-    # for pat in parsed:
-    #     print('== loading patient:', pat)
-    #     p = load_patient(met_path/pat)
-    #     if p:
-    #         p.resample_all_timeseries(360, 6, 'linear')
-    #     else:
-    #         print('== failed to load patient:', pat)

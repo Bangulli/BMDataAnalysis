@@ -14,6 +14,7 @@ from core import Metastasis
 from core import MetastasisTimeSeries
 from core import Patient, load_patient, PatientMetCounter
 import csv
+import logging
 import pathlib as pl
 import os
 import pandas as pd
@@ -22,7 +23,7 @@ import ast
 from visualization import *
 
 if __name__ == '__main__':
-    met_path = pl.Path('/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch') # location of preparsed metastases
+    met_path = pl.Path('/mnt/nas6/data/Target/task_524-504_REPARSED_METS_mrct1000_nobatch') # location of preparsed metastases
     match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/504-524/metrics.csv') # location of matching report csv to filter out unmatched lesions
     match_report = pd.read_csv(match_report, sep=';', index_col=None) 
     folder_name = 'csv_nn_multiclass_reseg_only_valid' # folder in which the output is stored in the met_path directory
@@ -61,7 +62,6 @@ if __name__ == '__main__':
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
         for d in value_dicts:
-            print(d)
             writer.writerow(d)
         
     df = pd.read_csv(met_path/folder_name/'features.csv')

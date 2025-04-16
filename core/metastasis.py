@@ -4,6 +4,10 @@ import copy
 import os
 import pathlib as pl
 from radiomics import featureextractor
+import logging
+
+radiomics_logger = logging.getLogger("radiomics")
+radiomics_logger.setLevel(logging.CRITICAL)
 
 def generate_empty_met_from_met(met):
     emet = EmptyMetastasis()
@@ -141,11 +145,12 @@ class Metastasis():
             self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
 
     def get_t1_radiomics(self):
-        if self.t1_path is not None:
+        if self.t1_path is not None and self.sitk is not None and sitk.GetArrayFromImage(self.sitk).any():
             extractor = featureextractor.RadiomicsFeatureExtractor()
             extractor.enableAllFeatures()
-            print(type(self.sitk), self.t1_path)
-            t1_radiomics = extractor.execute(str(self.t1_path), self.sitk)
+            #print(type(self.sitk), self.t1_path)
+            mask = self.sitk if self.sitk is not None else self.binary_source
+            t1_radiomics = extractor.execute(str(self.t1_path), mask)
             return t1_radiomics
         else: return False
         
