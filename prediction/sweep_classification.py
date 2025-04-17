@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
-def train_classification_model_sweep(model, df_train, df_test, data_cols, rano_cols, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}):
+def train_classification_model_sweep(model, df_train, df_test, data_cols, rano_cols, prediction_targets, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}):
     """
     Trains a sweep set of models to provided data.
     sweep == sweeps over the set and trains multiple possible configurations by training different feature configs to predict the next in time and 1 year response
@@ -14,29 +14,28 @@ def train_classification_model_sweep(model, df_train, df_test, data_cols, rano_c
     df_test: a pandas dataframe with the test data, result metrics will be computed using this
     verbose: verbosity level, to control reporting while running, default True = print to console, False = dont 
     """
-    if data_cols is None:
-        cols = list(df_train.columns)
-    else:
-        cols = data_cols
     if verbose: print(f'Encoding RANO response strings using encoding {rano_encoding}')
-    df_train[rano_cols] = df_train[rano_cols].map(lambda x: rano_encoding.get(x, x))
-    df_test[rano_cols] = df_test[rano_cols].map(lambda x: rano_encoding.get(x, x))
+    df_train[rano_cols] = df_train[rano_cols].applymap(lambda x: rano_encoding.get(x, x))
+    df_test[rano_cols] = df_test[rano_cols].applymap(lambda x: rano_encoding.get(x, x))
     models = {}
     quant_results = {}
-    for i in range(1, len(cols)):
-        key_next = f"nxt_{cols[:i]}->{cols[i]}"
-        key_year = f"1yr_{cols[:i]}->{cols[-1]}"
+    for i in range(1, len(prediction_targets)):
+
+        features = [d for d in data_cols if d not in prediction_targets[i-1:]]
+
+        key_next = f"nxt_{features}->{prediction_targets[i]}"
+        key_year = f"1yr_{features}->{prediction_targets[-1]}"
         if verbose: print(f'Training configuration {i}: {key_next} & {key_year}')
 
         models[key_next] = copy.deepcopy(model)
         models[key_year] = copy.deepcopy(model)
         if verbose: print("= Initialized models")
 
-        X_train = df_train[cols[:i]]
+        X_train = df_train[features]
         y_next = df_train[rano_cols[i]].astype(int)
         y_year = df_train[rano_cols[-1]].astype(int)
 
-        X_test = df_test[cols[:i]]
+        X_test = df_test[features]
         gt_next = df_test[rano_cols[i]]
         gt_year = df_test[rano_cols[-1]]
 

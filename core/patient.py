@@ -111,24 +111,33 @@ class Patient():
         for i, ts in enumerate(self.mets):
             if ts is not None:
                 cur_dict = {}
-
+                id = f"{self.id}:{ts.id.split(' ')[-1]}"
+                cur_dict['Lesion ID'] = id
                 if isinstance(features, str):
                     features = [features]
 
                 for feature in features:
                     if feature in ['all', 'volume']:
-                        cur_dict = {**cur_dict, **ts.get_volume(), 'Brain Volume': self.brain_volume}
+                        cur_dict = {**cur_dict, **ts.get_volume()}
                     
                     if feature in ['all', 'rano']:
                         cur_dict = {**cur_dict, **ts.get_rano('3d')}
 
                     if feature in ['all', 'radiomics']:
                         cur_dict = {**cur_dict, **ts.get_radiomics()}
+                    
+                    ### expand
+                    if feature in ['all', 'patient_meta']: # age sex weight height
+                        cur_dict = {**cur_dict, 'Brain Volume': self.brain_volume}
 
+                    ### future work
+                    if feature in ['all', 'dose']: # the dose innit
+                        pass
+                    if feature in ['all', 'lesion_meta']: # location in brain, primary, etc
+                        pass
+                    if feature in ['all', 'deep_vector']: # encoded vector from vincents foundation model
+                        pass
                 
-
-                id = f"{self.id}:{ts.id.split(' ')[-1]}"
-                cur_dict['Lesion ID'] = id
                 dict_list.append(cur_dict)
 
                 if keys is None:
@@ -252,11 +261,12 @@ class PatientMetCounter(Patient):
         self.dates_dict = self._sort_directories([d for d in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, d)) and ((self.path/d/'anat').is_dir() or (self.path/d/'rt').is_dir())], r"^ses-(\d{14})$")
         self.dates = list(self.dates_dict.keys())
         self.studies = len(self.dates)
-        self.mets = self._count_mets()
+        self.mets, self.mask = self._count_mets()
 
     def _count_mets(self):
         struct_el = ndimage.generate_binary_structure(rank=3, connectivity=3)
         mets = 0
+        mask = None
         rts = [d for d in self.dates if (self.path/d/'rt').is_dir()]
 
         mapped_path = self.mapping.loc[self.mapping['source_study_path'] == str(self.path/self.dates[-1])] # dates are in chronological order so the last entry in the series should have all metastases found in rt
@@ -267,11 +277,11 @@ class PatientMetCounter(Patient):
             rt_gt_path = pl.Path(path)
             mask = sitk.ReadImage(rt_gt_path/name)
             mask_arr = sitk.GetArrayFromImage(mask)
-            mask_arr = ndimage.binary_closing(mask_arr, struct_el)
+            #mask_arr = ndimage.binary_closing(mask_arr, struct_el)
             label_arr, n_labels = ndimage.label(mask_arr, structure=struct_el)
             mets+=n_labels
 
             self.mask = mask
             self.mask_arr = mask_arr
             self.labels = label_arr
-        return mets
+        return mets, mask

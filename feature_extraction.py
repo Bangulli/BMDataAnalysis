@@ -58,11 +58,13 @@ if __name__ == '__main__':
 
 
     with open(met_path/folder_name/'features.csv', 'w') as file:
+        print(f'== extracted {len(keys)} features for {len(value_dicts)} metastases, writing to file...')
         header = keys
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
         for d in value_dicts:
             writer.writerow(d)
+        print('== done')
         
     df = pd.read_csv(met_path/folder_name/'features.csv')
     ranos = [k for k in df.columns if k.startswith('rano_')]
