@@ -314,7 +314,21 @@ class MetastasisTimeSeries():
             if self.time_series[k] is not None:
                 print(f"    t{i}: {str(self.time_series[k])}, date = {self.dates[k]}")
 
+    def set_match(self, is_match):
+        self.is_match = is_match
+
 ####### GETTERS
+    def get_time_delta(self):
+        t0 = None
+        res = {}
+        for i, k in enumerate(self.keys):
+            if t0 is None:
+                res[f"t{i}_timedelta_days"] = 0
+                t0 = self.dates[k]
+            else:
+                res[f"t{i}_timedelta_days"] = (self.dates[k]-t0).days
+        return res
+
     def get_rano(self, mode='3d'):
         """
         computes a dictionary of rano classifications for each timepoint 
@@ -331,11 +345,10 @@ class MetastasisTimeSeries():
         nadir = max(nadir, 1e-6) # avoid division by zero error
         nadir = min(nadir, baseline) # overrule nadir with baseline if it is smaller
         rano_dict = {}
-        rano_dict['rano_0'] = None
         for i, d in enumerate(self.keys):
             if i == 0:
-                continue
-            rano_dict['rano_'+str(int((self.dates[d]-self.dates[self.keys[0]]).days))] = self.time_series[d].rano(baseline, nadir, mode)
+                rano_dict[f"t{i}_rano"] = None
+            rano_dict[f"t{i}_rano"] = self.time_series[d].rano(baseline, nadir, mode)
         return rano_dict
     
     def get_radiomics(self):
@@ -345,12 +358,11 @@ class MetastasisTimeSeries():
         radio_dict = {}
         ref_dict = None
         for i, d in enumerate(self.keys):
-
+            print(f'=== working on t{i}')
             radiomics = self.time_series[d].get_t1_radiomics()
             if ref_dict is None: ref_dict = copy.deepcopy(radiomics)
             if radiomics:
-                key = str(int((self.dates[d]-self.dates[self.keys[0]]).days))
-                prefix = f'radiomics_{key}_'
+                prefix = f't{i}_radiomics_'
                 value_keys = [k for k in radiomics.keys() if not k.startswith('diagnostics')]
                 for v_k in value_keys:
                     value = radiomics[v_k]
@@ -362,8 +374,7 @@ class MetastasisTimeSeries():
                     else:
                         radio_dict[prefix+v_k] = value
             else:
-                key = str(int((self.dates[d]-self.dates[self.keys[0]]).days))
-                prefix = f'radiomics_{key}_'
+                prefix = f't{i}_radiomics_'
                 value_keys = [k for k in ref_dict.keys() if not k.startswith('diagnostics')]
                 for v_k in value_keys:
                     value = ref_dict[v_k]
@@ -382,11 +393,8 @@ class MetastasisTimeSeries():
         Returns a dictionary of delta_t as keys and lesion volume as values
         """
         value_dict = {}
-        value_dict[0] = self.time_series[self.keys[0]].lesion_volume
         for i, d in enumerate(self.keys):
-            if i == 0:
-                continue
-            value_dict[int((self.dates[d]-self.dates[self.keys[0]]).days)] = self.time_series[d].lesion_volume
+            value_dict[f"t{i}_volume"] = self.time_series[d].lesion_volume
         return value_dict
 
 

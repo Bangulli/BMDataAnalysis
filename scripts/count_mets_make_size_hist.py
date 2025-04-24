@@ -5,6 +5,9 @@ import numpy as np
 from PrettyPrint import *
 import matplotlib.pyplot as plt
 import SimpleITK as sitk
+import pandas as pd
+import glob
+import shutil
 from scipy.ndimage import label, generate_binary_structure, binary_closing, binary_opening
 
 def make_size_histogram(data, filename, clip=500):
@@ -43,6 +46,11 @@ if __name__ == '__main__':
     struct_2C = generate_binary_structure(3, 2)
     struct_3C = generate_binary_structure(3, 3)
 
+    mapping = pd.read_csv('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch/nnUNet_mapping.csv')
+
+    comp_target = pl.Path('/mnt/nas6/data/Target/microlesions_check')
+
+    count = 0
     for mask_file in os.listdir(labeled_gt_masks):
         if not mask_file.endswith('.nii.gz'):
             continue
@@ -54,62 +62,75 @@ if __name__ == '__main__':
         raw_labels, raw_n = label(raw, struct_2C)
         if raw_n == 0: sizes_raw.append(0)
         else:
+            encoded = mask_file.split('.')[0] + '_'
+            path = mapping.loc[mapping['nnUNet_UID'] == encoded, 'nnUNet_set_dir']
+            path = pl.Path(path.iloc[0])
+            associated = glob.glob(f"{path/encoded}*")
             for l in range(raw_n):
                 sizes_raw.append(np.sum(raw_labels== l+1))
-        # compute morph op labels
-        morph_opened = binary_opening(raw, struct_3C)
-        morph_opened_labels, morph_opened_n = label(morph_opened, struct_2C)
-        if morph_opened_n == 0: sizes_morph_op.append(0)
-        else:
-            for l in range(morph_opened_n):
-                sizes_morph_op.append(np.sum(morph_opened_labels==l+1))
+                if np.sum(raw_labels== l+1) < 27:
+                    print(f"Found micro lesion of size {np.sum(raw_labels== l+1)} in {labeled_gt_masks/mask_file}")
+                    sitk.WriteImage(mask, comp_target/f"sample_{count}_task_{task}_output.nii.gz")
+                    for i, f in enumerate(associated):
+                        shutil.copyfile(f, comp_target/f"sample_{count}_task_{task}_input_{i}.nii.gz")
+                    count += 1
 
-        morph_closed = binary_closing(raw, struct_3C)
-        morph_closed_labels, morph_closed_n = label(morph_closed, struct_2C)
-        if morph_closed_n == 0: sizes_morph_co.append(0)
-        else:
-            for l in range(morph_closed_n):
-                sizes_morph_co.append(np.sum(morph_closed_labels==l+1))
+        if count == 20:
+            break
+        # # compute morph op labels
+        # morph_opened = binary_opening(raw, struct_3C)
+        # morph_opened_labels, morph_opened_n = label(morph_opened, struct_2C)
+        # if morph_opened_n == 0: sizes_morph_op.append(0)
+        # else:
+        #     for l in range(morph_opened_n):
+        #         sizes_morph_op.append(np.sum(morph_opened_labels==l+1))
 
-        morph_both = binary_closing(raw, struct_3C)
-        morph_both = binary_opening(morph_both, struct_3C)
-        morph_both_labels, morph_both_n = label(morph_both, struct_2C)
-        if morph_both_n == 0: sizes_morph_both.append(0)
-        else:
-            for l in range(morph_both_n):
-                sizes_morph_both.append(np.sum(morph_both_labels==l+1))
+        # morph_closed = binary_closing(raw, struct_3C)
+        # morph_closed_labels, morph_closed_n = label(morph_closed, struct_2C)
+        # if morph_closed_n == 0: sizes_morph_co.append(0)
+        # else:
+        #     for l in range(morph_closed_n):
+        #         sizes_morph_co.append(np.sum(morph_closed_labels==l+1))
+
+        # morph_both = binary_closing(raw, struct_3C)
+        # morph_both = binary_opening(morph_both, struct_3C)
+        # morph_both_labels, morph_both_n = label(morph_both, struct_2C)
+        # if morph_both_n == 0: sizes_morph_both.append(0)
+        # else:
+        #     for l in range(morph_both_n):
+        #         sizes_morph_both.append(np.sum(morph_both_labels==l+1))
         
-        # compute 3 connectivity labels
-        connect3_labels, connect3_n = label(raw, struct_3C)
-        if connect3_n == 0: sizes_3con.append(0)
-        else:
-            for l in range(connect3_n):
-                sizes_3con.append(np.sum(connect3_labels== l+1))
-        # compute labels with both changes
-        morph3_labels, morph3_n = label(morph_both, struct_3C)
-        if morph3_n == 0: sizes_both.append(0)
-        else:
-            for l in range(morph3_n):
-                sizes_both.append(np.sum(morph3_labels== l+1))
-        print(f"File {mask_file} has objects:\n    {raw_n}=default\n    {morph3_n}=with morph\n    {connect3_n}=with 3 connectivity labeling\n    {morph3_n}=with both changes")
+        # # compute 3 connectivity labels
+        # connect3_labels, connect3_n = label(raw, struct_3C)
+        # if connect3_n == 0: sizes_3con.append(0)
+        # else:
+        #     for l in range(connect3_n):
+        #         sizes_3con.append(np.sum(connect3_labels== l+1))
+        # # compute labels with both changes
+        # morph3_labels, morph3_n = label(morph_both, struct_3C)
+        # if morph3_n == 0: sizes_both.append(0)
+        # else:
+        #     for l in range(morph3_n):
+        #         sizes_both.append(np.sum(morph3_labels== l+1))
+        #print(f"File {mask_file} has objects:\n    {raw_n}=default\n    {morph3_n}=with morph\n    {connect3_n}=with 3 connectivity labeling\n    {morph3_n}=with both changes")
 
         
         
-    with open(f"/home/lorenz/BMDataAnalysis/logs/{task}.txt", "w") as f:
-        f.write(f"Found {len([o for o in sizes_raw if o != 0])} objects in mode = default\n")
-        f.write(f"Found {len([o for o in sizes_morph_op if o != 0])} objects in mode = only morphology open\n")
-        f.write(f"Found {len([o for o in sizes_morph_co if o != 0])} objects in mode = only morphology close\n")
-        f.write(f"Found {len([o for o in sizes_morph_both if o != 0])} objects in mode = only morphology both\n")
-        f.write(f"Found {len([o for o in sizes_3con if o != 0])} objects in mode = only connect 3 labeling\n")
-        f.write(f"Found {len([o for o in sizes_both if o != 0])} objects in mode = moprh both and connect 3 labeling\n")
+    # with open(f"/home/lorenz/BMDataAnalysis/logs/{task}.txt", "w") as f:
+    #     f.write(f"Found {len([o for o in sizes_raw if o != 0])} objects in mode = default\n")
+    #     f.write(f"Found {len([o for o in sizes_morph_op if o != 0])} objects in mode = only morphology open\n")
+    #     f.write(f"Found {len([o for o in sizes_morph_co if o != 0])} objects in mode = only morphology close\n")
+    #     f.write(f"Found {len([o for o in sizes_morph_both if o != 0])} objects in mode = only morphology both\n")
+    #     f.write(f"Found {len([o for o in sizes_3con if o != 0])} objects in mode = only connect 3 labeling\n")
+    #     f.write(f"Found {len([o for o in sizes_both if o != 0])} objects in mode = moprh both and connect 3 labeling\n")
 
 
-    make_size_histogram(sizes_raw, f'{task}_Default')
-    make_size_histogram(sizes_morph_op, f'{task}_Morph_open')
-    make_size_histogram(sizes_morph_co, f'{task}_Morph_close')
-    make_size_histogram(sizes_morph_both, f'{task}_Morph_both')
-    make_size_histogram(sizes_3con, f'{task}_Connect3')
-    make_size_histogram(sizes_both, f'{task}_MorprhCon3')
+    # make_size_histogram(sizes_raw, f'{task}_Default')
+    # make_size_histogram(sizes_morph_op, f'{task}_Morph_open')
+    # make_size_histogram(sizes_morph_co, f'{task}_Morph_close')
+    # make_size_histogram(sizes_morph_both, f'{task}_Morph_both')
+    # make_size_histogram(sizes_3con, f'{task}_Connect3')
+    # make_size_histogram(sizes_both, f'{task}_MorprhCon3')
 
 
 

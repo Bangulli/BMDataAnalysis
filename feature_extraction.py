@@ -23,10 +23,10 @@ import ast
 from visualization import *
 
 if __name__ == '__main__':
-    met_path = pl.Path('/mnt/nas6/data/Target/task_524-504_REPARSED_METS_mrct1000_nobatch') # location of preparsed metastases
-    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/504-524/metrics.csv') # location of matching report csv to filter out unmatched lesions
+    met_path = pl.Path('/mnt/nas6/data/Target/task_502_PARSED_METS_mrct1000_nobatch') # location of preparsed metastases
+    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/502/metrics.csv') # location of matching report csv to filter out unmatched lesions
     match_report = pd.read_csv(match_report, sep=';', index_col=None) 
-    folder_name = 'csv_nn_multiclass_reseg_only_valid' # folder in which the output is stored in the met_path directory
+    folder_name = 'csv_nn_only_valid' # folder in which the output is stored in the met_path directory
     os.makedirs(met_path/folder_name, exist_ok=True)
 
 
@@ -44,7 +44,8 @@ if __name__ == '__main__':
             
 
             if p:
-                p.discard_unmatched(list(matched_mets.values()))
+                p.tag_unmatched(list(matched_mets.values()))
+
                 p.resample_all_timeseries(360, 6, 'nearest')
 
                 v, keys = p.get_features('all')
@@ -67,6 +68,6 @@ if __name__ == '__main__':
         print('== done')
         
     df = pd.read_csv(met_path/folder_name/'features.csv')
-    ranos = [k for k in df.columns if k.startswith('rano_')]
+    ranos = [k for k in df.columns if k.endswith('_rano')]
     plot_sankey(df[ranos], met_path/folder_name)
    
