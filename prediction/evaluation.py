@@ -20,3 +20,10 @@ def classification_evaluation(rano_gt, rano_pd):
     res['classification_report'] = sklearn.metrics.classification_report(rano_gt, rano_pd, digits=4)
     res['confusion_matrix'] = sklearn.metrics.confusion_matrix(rano_gt, rano_pd, sample_weight=weights, normalize='all', labels=np.unique(rano_gt))
     return res
+
+def regression_evaluation(gt, pd):
+    res = {}
+    res['rmse'] = sklearn.metrics.root_mean_squared_error(gt, pd)
+    res['r2'] = sklearn.metrics.r2_score(gt, pd)
+    res['mae'] = sklearn.metrics.mean_absolute_error(gt, pd) 
+    return res

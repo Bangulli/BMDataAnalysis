@@ -125,3 +125,19 @@ def plot_prediction_metrics(result, output):
     fig.clf()
     plt.close()
     plt.clf()
+
+def plot_regression_metrics(result, output):
+    values = []
+    xticks = []
+    for k, v in result.items():
+        if k in ['rmse', 'mae', 'r2']:
+            values.append(v)
+            xticks.append(k)
+    plt.bar(xticks, values)
+    plt.xlabel("Metric")
+    plt.ylabel(f"Value")
+    plt.title(f"Evaluation Metrics")
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.savefig(output/f"eval.png")
+    plt.close()
+    plt.clf()

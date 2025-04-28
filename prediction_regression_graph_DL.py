@@ -20,7 +20,7 @@ import torch
 import numpy as np
 from collections import Counter
 from torch_geometric.loader import DataLoader
-from prediction import GraphClassificationModel, GCN, GAT, classification_evaluation
+from prediction import GraphClassificationModel, GCN, GAT, classification_evaluation, TimeAwareGNN
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     data_source = pl.Path('/mnt/nas6/data/Target/BMPipeline_DEVELOPMENT_runs/task_502_PARSED_METS_mrct1000_nobatch/csv_nn_only_valid/features.csv')
     prediction_type = 'multi'
     feature_selection = 'none'
-    method = 'simplest_GCN_batch'
+    method = 'GCNReg'
     output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/{data_source.parent.name}')
     used_features = ['volume', 'radiomics']
 
@@ -57,10 +57,10 @@ if __name__ == '__main__':
     volume_cols = [c+'_volume' for c in data_prefixes] # used to normalize the volumes
     rano_cols = [elem+'_rano' for elem in data_prefixes] # used in the training method to select the current targets
 
-    train_data, test_data = d.load_prepro_data(path=data_source, drop_suffix=eliminator, rano_encoding=rano_encoding, time_required=True, used_features=used_features)
+    train_data, test_data = d.load_prepro_data(path=data_source, drop_suffix=eliminator, rano_encoding=rano_encoding, time_required=True, used_features=used_features, normalize_volume=True)
 
     ## prepare output
-    output = output_path/f'classification_{prediction_type}_{method}_featuretypes={used_features}_selection={feature_selection}'
+    output = output_path/f'regression_{method}_featuretypes={used_features}_selection={feature_selection}'
     os.makedirs(output, exist_ok=True)
     with open(output/'used_feature_names.txt', 'w') as file:
         file.write("Used feature names left in the dataframe:\n")
@@ -77,30 +77,32 @@ if __name__ == '__main__':
     torch_weights = torch_weights / torch_weights.sum()  # Normalize (optional but nice)
 
     # make datasets
-    dataset_train = d.BrainMetsGraphClassification(train_data,
+    dataset_train = d.BrainMetsNodeRegression(train_data,
         used_timepoints = ['t0', 't1', 't2'], #'t3', 't4', 't5'], 
         ignored_suffixes = ('_timedelta_days', '_rano', 'Lesion ID'), 
         rano_encoding = rano_encoding,
-        target_name = 't6_rano',
+        target_name = 't6',
         extra_features = None,
-        fully_connected=False,
+        fully_connected=True,
         direction=None,
         transforms = None,
         )
-    dataset_test = d.BrainMetsGraphClassification(test_data,
+    dataset_test = d.BrainMetsNodeRegression(test_data,
         used_timepoints = ['t0', 't1', 't2'],# 't3', 't4', 't5'], 
         ignored_suffixes = ('_timedelta_days', '_rano', 'Lesion ID'), 
         rano_encoding = rano_encoding,
-        target_name = 't6_rano',
+        target_name = 't6',
         extra_features = None,
-        fully_connected=False,
+        fully_connected=True,
         transforms = None,
         direction = None
         )
-
+    
+    # for sample in dataset_train:
+    #     print(vars(sample))
     # init training variables
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = SimplestGCN(num_out, dataset_train.get_node_size()).to(device)
+    model = GCNRegress(dataset_train.get_node_size(), dataset_train.get_node_size()).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
@@ -112,21 +114,22 @@ if __name__ == '__main__':
     # run training
     best_model, best_loss = torch_engine.train(model, 
                                     dataset= dataset_train, 
-                                    loss_function=F.cross_entropy,
-                                    epochs=200,
+                                    loss_function=F.mse_loss,
+                                    epochs=1000,
                                     optimizer=optimizer,
                                     scheduler=scheduler,
                                     working_dir=output,
                                     device=device,
                                     validation=0.25,
-                                    batch_size=64
+                                    batch_size='all',
+                                    use_target_index=True,
                                     )
     print(f"Best model achieved loss {best_loss:4f}")
 
     # evaluate
-    best_res = torch_engine.test_classification(best_model, dataset_test, device)
-    print(f"""Best model achieved a class weight balanced accuracy {best_res['balanced_accuracy']:4f}""")
-    print(best_res['classification_report'])
+    best_res = torch_engine.test_regression(best_model, dataset_test, device)
+    print(f"""Best model achieved an rmse of: {best_res['rmse']:4f}""")
+
 
     # plot
-    plot_prediction_metrics(best_res, output)
+    plot_regression_metrics(best_res, output)

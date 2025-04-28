@@ -5,7 +5,7 @@ from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from visualization import *
-
+import data as d
 from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
 
@@ -44,53 +44,42 @@ if __name__ == '__main__':
 
     data_source = pl.Path('/mnt/nas6/data/Target/BMPipeline_DEVELOPMENT_runs/task_502_PARSED_METS_mrct1000_nobatch/csv_nn_only_valid/features.csv')
     prediction_type = 'multi'
+    feature_selection = 'LASSO'
     method = 'LGBM'
     model = LGBMClassifier(class_weight='balanced')
     output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/{data_source.parent.name}')
-    used_features = ['radiomics']
+    used_features = ['radiomics', 'volume']
 
     if prediction_type == 'binary':
         rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
     else:
         rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}
 
+    if feature_selection == 'LASSO':
+        eliminator = d.LASSOFeatureEliminator()
+    if feature_selection == 'correlation':
+        eliminator = d.FeatureCorrelationEliminator()
+    if feature_selection == 'model':
+        eliminator = d.ModelFeatureEliminator()
+    else:
+        eliminator = None
+
     data_prefixes = ["t0", "t1", "t2", "t3", "t4", "t5", "t6"] # used in the training method to select the features for each step of the sweep
     volume_cols = [c+'_volume' for c in data_prefixes] # used to normalize the volumes
     rano_cols = [elem+'_rano' for elem in data_prefixes] # used in the training method to select the current targets
 
-    data = pd.read_csv(data_source, index_col=None)
-    data.fillna(0)
-        
-
-    # static data preprocessing
-    data[volume_cols[1:]] = data[volume_cols[1:]].div(data[volume_cols[0]], axis=0) # normalize follow up volume
-    data[volume_cols[0]]=zscore(data[volume_cols[0]]) # normalize init volume
-    ## normalize delta times by one year
-    times = [c+'_timedelta_days' for c in data_prefixes]
-    data[times]=data[times].div(365.25) 
-    ## nromalize radiomics 
-    for tp in data_prefixes:
-        for col in data.columns:
-            if col.startswith(f"{tp}_radiomics"):
-                data[col]=zscore(pd.to_numeric(data[col], errors='coerce')) # try to parse every value to floats
-    ## drop unused features
-    to_keep = []
-    for col in data.columns:
-        for tp in data_prefixes:
-            for feature in used_features:
-                if col.startswith(f"{tp}_{feature}") or col in rano_cols and col not in to_keep:
-                    to_keep.append(col)
-
-    print(to_keep)
-    ([data.drop(columns=c, inplace=True, axis=0) for c in data.columns if c not in to_keep])
-    print(f'Running with features {data.columns}')
+    train_data, test_data = d.load_prepro_data(path=data_source, drop_suffix=eliminator, rano_encoding=rano_encoding, used_features=used_features)
   
-    output = output_path/f'classification_{prediction_type}_{method}_features={used_features}'
+    output = output_path/f'classification_{prediction_type}_{method}_featuretypes={used_features}_selection={feature_selection}'
+    os.makedirs(output, exist_ok=True)
+    with open(output/'used_feature_names.txt', 'w') as file:
+        file.write("Used feature names left in the dataframe:\n")
+        for c in train.columns:
+            file.write(f"   - {c}\n")
+        file.write("NOTE: rano columns are used as targets not as prediction")
 
-    ## dataset splitting
-    labels = [d[rano_cols[-1]] for i, d in data.iterrows()]
-    train, test = train_test_split(data, test_size=0.2, random_state=42, stratify=labels)
 
 
-    _, res_quant = train_classification_model_sweep(model, train, test, data_prefixes=data_prefixes, rano_encoding=rano_encoding, prediction_targets=rano_cols)
+
+    _, res_quant = train_classification_model_sweep(model, train_data, test_data, data_prefixes=data_prefixes, rano_encoding=rano_encoding, prediction_targets=rano_cols)
     plot_prediction_metrics_sweep(res_quant, output)
