@@ -1,39 +1,45 @@
-## IDEAS
-# patient wise loading and processing -> identify single lesions and store as csv
-# 
-# for each anat image in the patient segment
-# identify correspondence -> maximum overlap https://www.nature.com/articles/s41467-024-52414-2
-# 
-# identify single lesions
-# discretize each lesion into 6 timestamps by interpolating actual data into 2 month intervals -> METHOD? https://www.mdpi.com/2073-4441/9/10/796
-#
-# each lesion is a list of len(6) containing the volume at each time stamp
-# for clustering each lesion is a list with len(6), t0 tumor volume and relative growth/shrinkage at each time stamp after t0
-
 from core import Metastasis
 from core import MetastasisTimeSeries
 from core import Patient, load_patient, PatientMetCounter
 import csv
-import logging
 import pathlib as pl
 import os
-import pandas as pd
 from PrettyPrint import *
+from scripts.compare_segs import *
+import pandas as pd
 import ast
 from visualization import *
-from scripts.compare_segs import *
+
 
 if __name__ == '__main__':
-    processed_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED_lenient_inclusion')
-    met_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502') # location of preparsed metastases
-    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/229_Patients/task_502/metrics.csv') # location of matching report csv to filter out unmatched lesions
-    folder_name = 'csv_nn' # folder in which the output is stored in the met_path directory
+    dataset_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED_lenient_inclusion')
+    met_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502')
+    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/229_Patients/task_502/metrics.csv')
+    
+    os.makedirs(met_path, exist_ok=True)
+
+    pats = [pat for pat in os.listdir(dataset_path) if pat.startswith('sub-PAT')]
+    parsed = [pat for pat in os.listdir(met_path) if pat.startswith('sub-PAT')]
+    pats = [pat for pat in pats if pat not in parsed]
+
+
+    ## intially parses the metastases
+    logger = Printer(log_type='txt')
+    for pat in pats:
+        print('== working on patient:', pat)
+        p = Patient(dataset_path/pat, log=logger, met_dir_name='mets_task_502')
+        p.validate()
+        p.print()
+        p.save(met_path)
+
+    
+
     if match_report.is_file():
         match_report = pd.read_csv(match_report, sep=';', index_col=None) 
     else:
-        compare_segs(match_report,processed_path, met_path)
+        compare_segs(match_report, dataset_path, met_path)
         match_report = pd.read_csv(match_report, sep=';', index_col=None)
-    
+    folder_name = 'csv_nn_only_valid' # folder in which the output is stored in the met_path directory
     os.makedirs(met_path/folder_name, exist_ok=True)
 
 
@@ -48,12 +54,14 @@ if __name__ == '__main__':
         if any(matched_mets[0]):
             matched_mets = ast.literal_eval(matched_mets[0])
             p = load_patient(met_path/pat)
-            
+            p.validate()
 
             if p:
                 p.resample_all_timeseries(360, 6, 'nearest')
+
                 p.tag_unmatched(list(matched_mets.values()))
-                v, keys = p.get_features(['volume', 'rano'])
+
+                v, keys = p.get_features('all')
             
                 value_dicts += v
 

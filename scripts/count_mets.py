@@ -9,15 +9,15 @@ from PrettyPrint import *
 import matplotlib.pyplot as plt
 if __name__ == '__main__':
     ##### source data
-    dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch')
-    parsed_path = pl.Path('/mnt/nas6/data/Target/task_502_PARSED_METS_mrct1000_nobatch')
+    dataset_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED_lenient_inclusion')
+    parsed_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502')
 
     pats = [pat for pat in os.listdir(dataset_path) if pat.startswith('sub-PAT')]
 
     met_sourcs = []
     mets = []
     for pat in pats:
-        p = PatientMetCounter(dataset_path/pat, pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch/nnUNet_mapping.csv'))
+        p = PatientMetCounter(dataset_path/pat, pl.Path(dataset_path/'nnUNet_mapping.csv'))
         met_sourcs.append(p.mets)
         print(f"== patient {pat} has {p.mets} metastases in the source data")
         m = [f for f in os.listdir(parsed_path/pat) if f.startswith('Metastasis')]
@@ -79,3 +79,5 @@ if __name__ == '__main__':
     print(f"Reseg introduced {np.sum(disp[disp<0])} mets not in source")
     print(f"Reseg matched {np.sum(disp==0)} patients perfectly")
     print(f"Reseg missed {np.sum(disp[disp>0])} mets in source")
+    print(f"Raw data has {np.sum(met_sourcs)} mets")
+    print(f"Reseg has {np.sum(mets)} mets")

@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore')
 from prediction import *
 import pandas as pd
 import pathlib as pl
@@ -25,8 +27,7 @@ import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from scipy.stats import zscore
-import warnings
-warnings.filterwarnings('ignore')
+
 
 def generalized_mse_loss(x, y, weight=None, verbose=True):
     y_enc = torch.log1p(y)
@@ -46,9 +47,9 @@ def gmse_decoder(x, verbose=True):
 if __name__ == '__main__':
 ########## setup
     data_source = pl.Path('/mnt/nas6/data/Target/BMPipeline_DEVELOPMENT_runs/task_502_PARSED_METS_mrct1000_nobatch/csv_nn_only_valid/features.csv')
-    prediction_type = 'multi'
+    prediction_type = 'normalized_volume_regression'
     feature_selection = 'none'
-    method = 'GCNReg'
+    method = 'GCNReg_baseline'
     output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/{data_source.parent.name}')
     used_features = ['volume']
 
@@ -78,13 +79,13 @@ if __name__ == '__main__':
         rano_encoding=rano_encoding, 
         time_required=True, 
         used_features=used_features, 
-        normalize_volume=True)
+        normalize_volume='factor')
 
     ## prepare output
     output = output_path/f'regression_{method}_featuretypes={used_features}_selection={feature_selection}'
     os.makedirs(output, exist_ok=True)
     with open(output/'used_feature_names.txt', 'w') as file:
-        file.write("Used feature names left in the dataframe:\n")
+        file.write("Available feature names left in the dataframe:\n")
         for c in train_data.columns:
             file.write(f"   - {c}\n")
         file.write("NOTE: rano columns are used as targets not as prediction")
@@ -116,15 +117,16 @@ if __name__ == '__main__':
         extra_features = None,
         fully_connected=True,
         transforms = None,
-        direction = None
+        direction = None,
+        test=True
         )
     
     # for sample in dataset_train:
     #     print(vars(sample))
     # init training variables
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = SimplestGCNRegress(dataset_train.get_node_size(), dataset_train.get_node_size()).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0)
+    model = GCNRegress(dataset_train.get_node_size(), dataset_train.get_node_size()).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
         T_0=50,       # First restart after 10 epochs
@@ -135,14 +137,14 @@ if __name__ == '__main__':
     # run training
     best_model, best_loss = torch_engine.train(model, 
                                     dataset= dataset_train, 
-                                    loss_function=F.smooth_l1_loss,
+                                    loss_function=F.mse_loss,
                                     epochs=1000,
                                     optimizer=optimizer,
                                     scheduler=scheduler,
                                     working_dir=output,
                                     device=device,
                                     validation=0.25,
-                                    batch_size='all',
+                                    batch_size=128,
                                     use_target_index=True,
                                     weighted_loss=False,
                                     verbose=False

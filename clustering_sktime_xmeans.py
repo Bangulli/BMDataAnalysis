@@ -16,30 +16,27 @@ import warnings
 warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
-    method_name = 'tsxmeans'
-    folder_name = 'csv_linear_multiclass_reseg_only_valid'
+    use_valid = True
+    method_name = f'''tsxmeans_{'valid' if use_valid else 'all'}'''
+    folder_name = 'csv_nn'
     use_derivatives = False
-    volume_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/volumes.csv', index_col=None)
-    rano_data = pd.read_csv(f'/mnt/nas6/data/Target/task_524-504_PARSED_METS_mrct1000_nobatch/{folder_name}/rano.csv', index_col=None)
-    renamer = {elem: 'rano-'+elem for elem in rano_data.columns}
-    rano_data = rano_data.rename(columns=renamer)
-
-    complete_data = pd.concat([volume_data, rano_data], axis=1)
-    
+    complete_data = pd.read_csv(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/{folder_name}/features.csv', index_col=None)
+    if use_valid: complete_data = complete_data[complete_data['RT_matched']]
     output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_')
 
     k = 42
     
     ## load volume data
-    data_cols = ["60", "120", "180", "240", "300", "360"]
-    rano_cols = ['rano-'+elem for elem in data_cols]
+    data_tps = ["t1", "t2", "t3", "t4", "t5", "t6"]
+    rano_cols = [elem+'_rano' for elem in data_tps]
+    data_cols = [elem+'_volume' for elem in data_tps]
     print(f'clustering {len(complete_data)} metastases')
     
     # Normalize by t0 Volume
-    complete_data[data_cols] = complete_data[data_cols].div(complete_data["0"], axis=0)
+    complete_data[data_cols] = complete_data[data_cols].div(complete_data["t0_volume"], axis=0)
 
     if use_derivatives:
-        derivatives = get_derivatives(complete_data[["0"]+data_cols], 'sobel', 'constant', 'relative')
+        derivatives = get_derivatives(complete_data[["t0_volume"]+data_cols], 'sobel', 'constant', 'relative')
 
         complete_data = pd.concat([complete_data, derivatives], axis=1)
 
@@ -74,12 +71,12 @@ if __name__ == '__main__':
 
     if use_derivatives:
         output = output.parent.parent/(output.parent.name+'_deriv')/output.name
-        data_cols = ["60", "120", "180", "240", "300", "360"] # overwrite the columns so it plots just the trajectory not the derivatives
+        data_cols = ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"] # overwrite the columns so it plots just the trajectory not the derivatives
 
     output = output.parent/(output.name+str(best_k))
 
     # ## Make plots for cluster
-    plot_cluster_centers(filtered_data, output, data_cols, rano_cols, label_col='cluster', init_col='0')
+    plot_cluster_centers(filtered_data, output, data_cols, rano_cols, label_col='cluster', init_col='t0_volume')
 
     # ## load rano data
     plot_sankey(filtered_data[rano_cols], output)

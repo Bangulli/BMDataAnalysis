@@ -167,6 +167,21 @@ class MetastasisTimeSeries():
         self.id = f"Metastasis {id}" if not id.startswith('Metastasis') else id
 
 ######## Public utils
+    def validate(self, raise_on_invalid=True):
+        prev = None
+        for k0, k1, k2  in zip(self.keys, list(self.time_series.keys()), list(self.dates.keys())):
+            if not k0==k1==k2:
+                print(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
+                if raise_on_invalid: raise RuntimeError(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
+            if prev is None:
+                prev = self.dates[k2]
+            else:
+                cur = self.dates[k2]
+                if (prev-cur).total_seconds() > 0:
+                    print(f"Time series is not causal!")
+                    if raise_on_invalid: raise RuntimeError(f"Time series is not causal!")
+
+                
     def save(self, path:pl.Path, use_symlinks=True):
         """
         Saves the metastasis series to a target directory
@@ -335,19 +350,18 @@ class MetastasisTimeSeries():
         """
         baseline = None
         nadir = np.Infinity
-        for i, ses in enumerate(self.keys):
-            cur_vol = self.time_series[ses].lesion_volume
-            if i == 0:
-                baseline = cur_vol
-                continue
-            if nadir > cur_vol:
-                nadir = cur_vol
-        nadir = max(nadir, 1e-6) # avoid division by zero error
-        nadir = min(nadir, baseline) # overrule nadir with baseline if it is smaller
         rano_dict = {}
         for i, d in enumerate(self.keys):
+            cur_vol = self.time_series[d].lesion_volume #is None else self.time_series[d].lesion_volume
             if i == 0:
                 rano_dict[f"t{i}_rano"] = None
+                baseline = cur_vol
+                nadir = cur_vol
+                continue
+            nadir = max(nadir, 1e-6) # avoid division by zero error
+            nadir = min(nadir, baseline) # overrule nadir with baseline if it is smaller
+            if nadir > cur_vol:
+                nadir = cur_vol
             rano_dict[f"t{i}_rano"] = self.time_series[d].rano(baseline, nadir, mode)
         return rano_dict
     

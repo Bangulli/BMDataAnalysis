@@ -99,8 +99,17 @@ class Patient():
         print(f"discarded {initial-len(self.mets)} metastases series, kept metastses: {[met for met in list(self.mets.keys())]}")
     
     def tag_unmatched(self, matched:list):
+        print('tagging matched metastases', matched)
         for i in list(self.mets.keys()):
-            self.mets[i].set_match(self.mets[i].id in matched)
+            if self.mets[i] is not None: self.mets[i].set_match(self.mets[i].id in matched)
+    
+    def validate(self, raise_on_invalid=True):
+        """
+        sanity check to se if the time order is correct and if all keys correspond to each other in the underlying datastructures
+        """
+        for k, met in self.mets.items():
+            #print('validating', k)
+            met.validate(raise_on_invalid)
 
 ####### GETTERS    
     def get_features(self, features='all', get_keys=True):
@@ -116,10 +125,13 @@ class Patient():
             print(f'== working on {i}')
             try:
                 if ts is not None:
+                    
                     cur_dict = {}
                     id = f"{self.id}:{ts.id.split(' ')[-1]}"
                     cur_dict['Lesion ID'] = id
-                    if hasattr(ts, 'is_match'): cur_dict['RT_matched'] = ts.is_match
+                    if hasattr(ts, 'is_match'): 
+                        cur_dict['RT_matched'] = ts.is_match
+
                     ts_data = ts.get_time_delta()
                     prefixes = list(ts_data.keys())
                     cur_dict = {**cur_dict, **ts_data}
@@ -272,6 +284,7 @@ class PatientMetCounter(Patient):
     def __init__(self, path, mapping):
         self.path = path
         self.mapping = pd.read_csv(mapping)
+        #print(self.mapping)
         self.id = path.name
         self.dates_dict = self._sort_directories([d for d in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, d)) and ((self.path/d/'anat').is_dir() or (self.path/d/'rt').is_dir())], r"^ses-(\d{14})$")
         self.dates = list(self.dates_dict.keys())
@@ -286,6 +299,7 @@ class PatientMetCounter(Patient):
         rts = [d for d in self.dates if (self.path/d/'rt').is_dir()]
 
         mapped_path = self.mapping.loc[self.mapping['source_study_path'] == str(self.path/self.dates[-1])] # dates are in chronological order so the last entry in the series should have all metastases found in rt
+        #print('mapped_path', mapped_path)
         if not mapped_path.empty:
             path = str(mapped_path.iloc[0]['nnUNet_set_dir'])
             name = str(mapped_path.iloc[0]['nnUNet_UID'])

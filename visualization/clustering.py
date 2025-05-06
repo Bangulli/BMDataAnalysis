@@ -12,7 +12,7 @@ from matplotlib.gridspec import GridSpec
 import seaborn as sns
 
 
-def plot_sankey(df, path, use_tempdir=False):
+def plot_sankey(df, path, use_tempdir=False, tag=''):
     fixed_order = ['CR', 'PR', 'SD', 'PD']
     base_colors = {
         'CR': '#1f77b4',  # blue
@@ -102,7 +102,7 @@ def plot_sankey(df, path, use_tempdir=False):
     fig.update_layout(title_text="RANO Flow Over Time", font_size=12)
 
     if not use_tempdir:
-        fig.write_image(path / "rano_flow_sankey_plot.png", width=1000, height=600)
+        fig.write_image(path /f"{tag}rano_flow_sankey_plot.png", width=1000, height=600)
     else:
         temp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
         fig.write_image(temp_path, width=1000, height=600)
@@ -137,7 +137,7 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         cluster_meta['MemberIDs'] = list(sub_cluster['Lesion ID'])
         
         print('== plotting cluster:', i)
-        x = [int(elem) for elem in data_cols]
+        x = [elem for elem in data_cols]
         y = c_centers[idx, :]
 
         fig = plt.figure(figsize=(12, 12))
@@ -319,7 +319,8 @@ def plot_recur_probs(df, rano_cols, label_col, path):
             probs = [data[timepoints[0]][c] / base_val]
             for i, tp in enumerate(timepoints):
                 if i != 0:
-                    probs.append(data[tp][c] / data[timepoints[i-1]][cat])
+                    ratio = data[tp][c] / data[timepoints[i-1]][cat] if data[timepoints[i-1]][cat]>0 else 0
+                    probs.append(ratio)
             prob_matrix.append(probs)
 
 

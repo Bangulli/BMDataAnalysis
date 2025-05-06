@@ -126,7 +126,7 @@ def plot_prediction_metrics(result, output):
     plt.close()
     plt.clf()
 
-def plot_regression_metrics(result, output):
+def plot_regression_metrics(result, output, tag=''):
     values = []
     xticks = []
     for k, v in result.items():
@@ -138,6 +138,6 @@ def plot_regression_metrics(result, output):
     plt.ylabel(f"Value")
     plt.title(f"Evaluation Metrics")
     plt.grid(True, linestyle='--', alpha=0.5)
-    plt.savefig(output/f"eval.png")
+    plt.savefig(output/f"{tag}_eval.png")
     plt.close()
     plt.clf()

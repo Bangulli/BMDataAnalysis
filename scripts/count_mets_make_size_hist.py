@@ -74,9 +74,6 @@ if __name__ == '__main__':
                     for i, f in enumerate(associated):
                         shutil.copyfile(f, comp_target/f"sample_{count}_task_{task}_input_{i}.nii.gz")
                     count += 1
-
-        if count == 20:
-            break
         # # compute morph op labels
         # morph_opened = binary_opening(raw, struct_3C)
         # morph_opened_labels, morph_opened_n = label(morph_opened, struct_2C)

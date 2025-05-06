@@ -5,8 +5,9 @@ from scipy.stats import zscore
 import numpy as np
 import copy
 
-def row2graph(row: pd.Series, timepoints: list, extra_features: list, y_name:str, fully_connected=True, direction=None, ignore_types: tuple = ('_timedelta_days', '_rano', 'Lesion ID'), verbose=False):
+def row2graph(row: pd.Series, timepoints: list, extra_features: list, y_name:str, fully_connected=True, direction=None, ignore_types: tuple = ('_timedelta_days', '_rano', 'Lesion ID'), verbose=False, test=False):
     # prepare variables and data
+    encode_reverser = row["ignored_vol_normalizer"]
     row = pd.to_numeric(row, errors='coerce') # saveguard against missparsed data
     row.fillna(0, inplace=True) # saveguard against nan in data
     edge_index = []
@@ -91,16 +92,21 @@ def row2graph(row: pd.Series, timepoints: list, extra_features: list, y_name:str
     rano = torch.tensor([row[f"{y_name}_rano"]], dtype=torch.long)
     edge_weights = torch.tensor(edge_weights, dtype=torch.float)
     edge_attributes = torch.tensor(edge_attributes, dtype=torch.float)
+    
     # parse to graph Data object
     data = Data(x=x, edge_index=edge_index, edge_weights=edge_weights, y=y, edge_attr=edge_attributes)
     data.target_index = torch.tensor([x.shape[0]-1])
     data.rano = rano
+    if test: data.decoder = encode_reverser
+    if test: data.id = row.name
+    if test & verbose: print("attaching data.decoder as", encode_reverser)
+    if test: data.row = row
     # Debug and validation
     if verbose: print(data, data.validate())
     else: data.validate(raise_on_error=True)
     if verbose: print('Edge info', data.edge_weights, data.edge_index)
     if verbose: print('Node Info', data.x, data.y)
-    return data
+    return data, feature_names
 
 class BrainMetsNodeRegression(Dataset):
     def __init__(self, 
@@ -113,6 +119,7 @@ class BrainMetsNodeRegression(Dataset):
                  extra_features = None,
                  transforms = None,
                  direction = None,
+                 test = False
                  ):
         self.table = df
         self.used_timepoints = used_timepoints
@@ -123,6 +130,8 @@ class BrainMetsNodeRegression(Dataset):
         self.transforms = transforms
         self.fully_connected = fully_connected
         self.direction = direction
+        self.test = test
+        if self.test: print('got the following encoders in constructor', self.table['ignored_vol_normalizer'])
         self._encode_rano()
 
     def __len__(self):
@@ -133,7 +142,7 @@ class BrainMetsNodeRegression(Dataset):
     
     def __getitem__(self, idx):
         row = self.table.iloc[idx, :]
-        graph = row2graph(row=row, timepoints=self.used_timepoints, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction)
+        graph, _ = row2graph(row=row, timepoints=self.used_timepoints, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction, test=self.test)
         if self.transforms:
             graph = self.transforms(graph)
         return graph
@@ -148,5 +157,11 @@ class BrainMetsNodeRegression(Dataset):
     def get_node_size(self):
         g = self[0]
         return g.x.shape[-1]
+    
+    def get_target_names(self):
+        row = self.table.iloc[0, :]
+        _, self.feature_names_out = row2graph(row=row, timepoints=self.used_timepoints, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction)
+        return self.feature_names_out
+
     
 #class MetTSGraphInMemory()

@@ -148,6 +148,7 @@ class Metastasis():
         if self.t1_path is not None and self.sitk is not None and sitk.GetArrayFromImage(self.sitk).any():
             extractor = featureextractor.RadiomicsFeatureExtractor()
             extractor.enableAllFeatures()
+            extractor.enableAllImageTypes()
             #extractor.settings['binwidth'] = 100
             #print(type(self.sitk), self.t1_path)
             arr = sitk.GetArrayFromImage(self.sitk)

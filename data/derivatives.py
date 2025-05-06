@@ -11,7 +11,7 @@ def get_derivatives(df, kernel='sobel', padding='constant', values='relative'):
     """
 
     if values == 'relative':
-        df.loc[:,"0"]=1
+        df.loc[:,"t0_volume"]=1
     elif values == 'absolute':
         pass
     else:
@@ -33,6 +33,6 @@ def get_derivatives(df, kernel='sobel', padding='constant', values='relative'):
 
         derivatives.append(der)
   
-    ddf = pd.DataFrame(derivatives, columns=['dr_60', 'dr_120','dr_180','dr_240','dr_300','dr_360'])
+    ddf = pd.DataFrame(derivatives, columns=['t1_dr', 't2_dr','t3_dr','t4_dr','t5_dr','t6_dr'])
     print(ddf)
     return ddf

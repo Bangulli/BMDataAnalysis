@@ -100,9 +100,143 @@ def find_best_series_index(metrics, method: str='both'):
 
         return best_series
     
+def compare_segs(output, dataset, parsed):
+    os.makedirs(output.parent, exist_ok=True)
+    pats = [pat for pat in os.listdir(dataset) if pat.startswith('sub-PAT')]
+
+    met_sourcs = []
+    met_parsed = []
+
+
+    ambiguous_matches = 0
+    matches = 0
+    parsed_unmatched = 0
+    gt_unmatched = 0
+    t0_zero_parsed = 0
+
+    with open(output.parent/'matching_report.txt', 'w') as report:
+        with open(output, 'w') as mcsv:
+            header = [
+                'patient_id',
+                'labels_in_gt',
+                'parsed_mets',
+                't0_nonzero_parsed_mets',
+                'matched_mets',
+                'unmatched_parsed_mets',
+                'unmatched_gt_mets',
+                'ambiguoug_parsed_matches',
+                't0_zero_mets'
+            ]
+
+            writer = csv.DictWriter(mcsv, fieldnames=header, delimiter=';')
+            writer.writeheader()
+            for pat in pats:
+                p = PatientMetCounter(dataset/pat, pl.Path(dataset/'nnUNet_mapping.csv'))
+                
+                met_sourcs.append(p.mets)
+                #print(f"== patient {pat} has {p.mets} metastases in the source data")
+                m = [f for f in os.listdir(parsed/pat) if f.startswith('Metastasis')]
+                ms = 0
+                met_objects = []
+                for i in m:
+                    t0 = [f for f in os.listdir(parsed/pat/i) if f.startswith('t0')][0]
+                    if (parsed/pat/i/t0/'metastasis_mask_binary.nii.gz').is_file():
+                        ms+=1
+                    met_objects.append(load_metastasis(parsed/pat/i/t0))
+
+                met_parsed.append(ms)
+                #print(f"== patient {pat} has {ms} metastases in the parsed data")
+                gt_sitk = sitk.GetImageFromArray(p.labels)
+                gt_sitk.CopyInformation(p.mask)
+
+                report_dict = {}
+                report_dict['patient_id'] = pat
+                report_dict['labels_in_gt'] = np.max(p.labels)
+                report_dict['parsed_mets'] = len(met_objects)
+                report_dict['t0_nonzero_parsed_mets'] = ms
+                report_dict['matched_mets'] = {}
+                report_dict['unmatched_parsed_mets'] = []
+                report_dict['unmatched_gt_mets'] = []
+                report_dict['ambiguoug_parsed_matches'] = {}
+                report_dict['t0_zero_mets'] = []
+
+                print(f"=== Working on Patient {pat}")
+                for metastasis_object in met_objects:
+                    if np.sum(p.labels) == 0:
+                        report_dict['t0_zero_mets'].append(metastasis_object.t1_path.parent.parent.name)
+                        string = f"Metastasis {metastasis_object.t1_path.parent.parent.name} is empty at t0"
+                    
+                    else:
+                        metrics = correspondence_metrics(metastasis_object, p.labels, p.mask)
+                        
+                        best_idx = find_best_series_index(metrics, 'both') 
+                        
+                        best_idx = best_idx + 1 if best_idx is not None else None
+
+                        if best_idx is not None and best_idx not in list(report_dict['matched_mets'].keys()):
+                            report_dict['matched_mets'][best_idx] = metastasis_object.t1_path.parent.parent.name
+                            string = f"Patient {pat} Metastasis {metastasis_object.t1_path.parent.parent.name} matches label {best_idx} with metrics {metrics[best_idx-1]} in the ground truth label\n"
+                        elif best_idx is not None and best_idx not in list(report_dict['matched_mets'].keys()):
+                            if not best_idx in list(report_dict['ambiguoug_parsed_matches'].keys()):
+                                report_dict['ambiguoug_parsed_matches'][best_idx] = [metastasis_object.t1_path.parent.parent.name, report_dict['matched_mets'][best_idx]]
+                            else:
+                                report_dict['ambiguoug_parsed_matches'][best_idx].append(metastasis_object.t1_path.parent.parent.name)
+                            string = f"Patient {pat} Metastasis at location {metastasis_object.t1_path.parent.parent.name} has matches with gt label that is already matched: {best_idx}, previous matching lesion is {report_dict['matched_mets'][best_idx]}"
+                        else:
+                            report_dict['unmatched_parsed_mets'].append(metastasis_object.t1_path.parent.parent.name)
+                            string = f"Patient {pat} Metastasis at location {metastasis_object.t1_path.parent.parent.name} has no match in the ground truth\n"
+
+                    print(string)
+                    report.writelines(string)
+
+                for label in np.unique(p.labels):
+                    if label == 0:
+                        continue
+                    elif label not in list(report_dict['matched_mets'].keys()):
+                        report_dict['unmatched_gt_mets'].append(label)
+
+                print(report_dict)
+                writer.writerow(report_dict)
+
+                matches += len(report_dict['matched_mets'].keys())
+                gt_unmatched += len(report_dict['unmatched_gt_mets'])
+                parsed_unmatched += len(report_dict['unmatched_parsed_mets'])
+                t0_zero_parsed += len(report_dict['t0_zero_mets'])
+                ambiguous_matches += len(report_dict['ambiguoug_parsed_matches'].keys())
+    
+    print(f"Found {matches} matching metastases in gt and parsing")
+    print(f"Found {gt_unmatched} metastases in the GT that are not found in parsing")
+    print(f"Found {parsed_unmatched} metastases in parsing that are not found in GT")
+    print(f"Found {t0_zero_parsed} parsed metastases that are empty at their first occurance")
+    print(f"Found {ambiguous_matches} GT metastases that have ambiguoug matches in the parsing")
+
+        
+
+    met_sourcs = np.asarray(met_sourcs)
+
+    print(f"found {met_sourcs.sum()} metastases in {len(pats)} patients in the pre reseg data")
+
+    met_parsed = np.asarray(met_parsed)
+
+    print(f"found {met_parsed.sum()} metastases in {len(pats)} patients in the reseg and parsed data")
+
+
+    disparity = []
+    with open(output.parent/'met_disparity.txt', 'w') as file:
+        for i, pat in enumerate(pats):
+            disparity.append(met_sourcs[i]-met_parsed[i])
+            print(f'{pat} has {met_sourcs[i]} in source and {met_parsed[i]} in parsed, disparity of {met_sourcs[i]-met_parsed[i]}')
+            file.writelines(f'{pat} has {met_sourcs[i]} in source and {met_parsed[i]} in parsed, disparity of {met_sourcs[i]-met_parsed[i]}\n')
+    
+    disp = np.asarray(disparity)
+
+    print(f"Reseg introduced {np.sum(disp[disp<0])} mets not in source")
+    print(f"Reseg matched {np.sum(disp==0)} patients perfectly")
+    print(f"Reseg missed {np.sum(disp[disp>0])} mets in source")
+    
 if __name__ == '__main__':
     ##### source data
-    dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_mrct1000_nobatch')
+    dataset_path = pl.Path('/mnt/nas6/data/Target/PROCESSED_lenient_inclusion')
     parsed_path = pl.Path('/mnt/nas6/data/Target/task_502_PARSED_METS_mrct1000_nobatch')
 
 
