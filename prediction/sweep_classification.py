@@ -28,6 +28,8 @@ def train_classification_model_sweep(model, df_train, df_test, data_prefixes, pr
         key_next = f"nxt_{data_prefixes[:i]}->{prediction_targets[i]}"
         key_year = f"1yr_{data_prefixes[:i]}->{prediction_targets[-1]}"
         if verbose: print(f'Training configuration {i}: {key_next} & {key_year}')
+        if verbose: [print(f"used feature: {c}") for c in features]
+        if verbose: print(f"target variable are: {prediction_targets[-1]} for one year and {prediction_targets[i]} for next value")
 
         models[key_next] = copy.deepcopy(model)
         models[key_year] = copy.deepcopy(model)
@@ -46,7 +48,7 @@ def train_classification_model_sweep(model, df_train, df_test, data_prefixes, pr
 
         if verbose: print("=== evaluating...")
         pd_next = models[key_next].predict(X_test)
-        quant_results[key_next] = classification_evaluation(gt_next, pd_next)
+        quant_results[key_next] = classification_evaluation(gt_next, pd_next, rano_encoding)
         if verbose: print(f"=== Next Value Model {key_next} achieved results {quant_results[key_next]} for quantity")
 
         if verbose: print("== Training year predictor")
@@ -54,7 +56,7 @@ def train_classification_model_sweep(model, df_train, df_test, data_prefixes, pr
 
         if verbose: print("=== evaluating...")
         pd_year = models[key_year].predict(X_test)
-        quant_results[key_year] = classification_evaluation(gt_year, pd_year)
+        quant_results[key_year] = classification_evaluation(gt_year, pd_year, rano_encoding)
         if verbose: print(f"=== One Year Model {key_year} achieved results {quant_results[key_year]} for quantity")
 
     return models, quant_results

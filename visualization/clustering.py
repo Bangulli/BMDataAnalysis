@@ -109,14 +109,17 @@ def plot_sankey(df, path, use_tempdir=False, tag=''):
         return temp_path
 
 
-def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluster", init_col="0"):
+def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluster", init_col="t0_volume"):
     os.makedirs(output_dir, exist_ok=True)
     unique_labels = np.unique(df[label_col])
     print('found unique labels:', unique_labels)
-    c_centers = np.zeros((len(unique_labels), len(data_cols)))
+    print(data_cols)
+    c_centers = np.ones((len(unique_labels), len(data_cols)))
+    print(c_centers.shape)
     idx = 0
     for label in unique_labels:
         c_centers[idx, :] = np.mean(df[df[label_col] == label][data_cols], axis=0)
+        c_centers[idx, 0] = 1
         idx += 1
 
     idx = 0
@@ -125,26 +128,28 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         
         sub_cluster = df[df[label_col] == i]
         cluster_meta['#Members'] = len(sub_cluster)
-        init_vol = np.mean(sub_cluster[init_col])
+        init_mean = np.mean(sub_cluster[init_col])
         init_std = np.std(sub_cluster[init_col])
+        init_vol = sub_cluster[init_col]
 
-        sub_cluster.loc[:, '0']= 0
         var = np.var(sub_cluster[data_cols], axis=0)
+        var[0] = 0
         std = np.std(sub_cluster[data_cols], axis=0)
+        std[0] = 0
 
         cluster_meta['Variances'] = var
         cluster_meta['StdDeviations'] = std
         cluster_meta['MemberIDs'] = list(sub_cluster['Lesion ID'])
         
         print('== plotting cluster:', i)
-        x = [elem for elem in data_cols]
+        x = data_cols
         y = c_centers[idx, :]
 
         fig = plt.figure(figsize=(12, 12))
-        gs = GridSpec(2,2, figure=fig)
+        gs = GridSpec(2,3, figure=fig)
 
-        ax00 = fig.add_subplot(gs[0,:])
-        #ax01 = fig.add_subplot(gs[0,1])
+        ax00 = fig.add_subplot(gs[0,:2])
+        ax01 = fig.add_subplot(gs[:,2])
 
         # --- Left plot: trajectory ---
         ax00.errorbar(x, y, yerr=std, fmt='-o', color='blue', ecolor='black', capsize=5, label='Cluster Trajectory')
@@ -154,24 +159,13 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         ax00.legend()
         ax00.grid(True)
 
-        # # --- Right plot: categorical distributions ---
-        # categorical_features = ['CR', 'PR', 'SD', 'PD']
-        # counts = [np.sum(sub_cluster[rano_cols[-1]] == feat) for feat in categorical_features]
-        # print(counts)
+        # --- Right plot: initial volumes boxplot ---
+        ax01.boxplot(init_vol, vert=True, patch_artist=True)
+        ax01.set_title('Boxplot of initial Volume')
+        ax01.set_ylabel('Volume [mm³]')
+        ax01.grid(True)
 
-        # # Bar plot layout
-        # for j, (feature, count_series) in enumerate(zip(categorical_features, counts)):
-        #     ax01.barh(
-        #         f"{feature}: {count_series}",
-        #         count_series,
-        #         label=feature
-        #     )
-
-        # ax01.set_title('1 Year RANO Response Distribution [volumetric]')
-        # ax01.legend()
-        # ax01.grid(True)
-
-        ax10 = fig.add_subplot(gs[1,:])
+        ax10 = fig.add_subplot(gs[1,:2])
 
         # --- bottom left plot sankey flow ---
         sankey = plot_sankey(sub_cluster[rano_cols], None, True)
@@ -181,7 +175,7 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
 
 
         # --- Shared plot settings ---
-        fig.suptitle(f"""Members = {cluster_meta["#Members"]}, Init Vol = {init_vol:.1f} ± {init_std:.1f} [mm³]""", fontsize=16)
+        fig.suptitle(f"""Members = {cluster_meta["#Members"]}, Init Vol = {init_mean:.1f} ± {init_std:.1f} [mm³]""", fontsize=16)
         fig.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space for suptitle
         fig.savefig(output_dir / f'trajectory_cluster_{i}.png')
         plt.clf()
@@ -308,7 +302,7 @@ def plot_recur_probs(df, rano_cols, label_col, path):
     for idx, cat in enumerate(categories):
         counts_per_tp = []
         data = results[cat]
-        base_val = data['t1'][cat]  # normalizing against t1 for this category
+        base_val = max(data['t1'][cat], 1e-6)  # normalizing against t1 for this category
 
         for tp in timepoints:
             counts_per_tp.append(np.asarray(list(data[tp].values())).sum())

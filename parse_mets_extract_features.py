@@ -34,12 +34,12 @@ if __name__ == '__main__':
 
     
 
-    if match_report.is_file():
-        match_report = pd.read_csv(match_report, sep=';', index_col=None) 
-    else:
-        compare_segs(match_report, dataset_path, met_path)
-        match_report = pd.read_csv(match_report, sep=';', index_col=None)
-    folder_name = 'csv_nn_only_valid' # folder in which the output is stored in the met_path directory
+    # if match_report.is_file():
+    #     match_report = pd.read_csv(match_report, sep=';', index_col=None) 
+    # else:
+    #     compare_segs(match_report, dataset_path, met_path)
+    #     match_report = pd.read_csv(match_report, sep=';', index_col=None)
+    folder_name = 'csv_nn' # folder in which the output is stored in the met_path directory
     os.makedirs(met_path/folder_name, exist_ok=True)
 
 
@@ -50,25 +50,25 @@ if __name__ == '__main__':
     for pat in parsed:
         print('== loading patient:', pat)
 
-        matched_mets = match_report.loc[match_report['patient_id']==pat, 'matched_mets'].to_list()
-        if any(matched_mets[0]):
-            matched_mets = ast.literal_eval(matched_mets[0])
-            p = load_patient(met_path/pat)
-            p.validate()
+        # matched_mets = match_report.loc[match_report['patient_id']==pat, 'matched_mets'].to_list()
+        # if any(matched_mets[0]):
+        #     matched_mets = ast.literal_eval(matched_mets[0])
+        p = load_patient(met_path/pat)
+        p.validate()
 
-            if p:
-                p.resample_all_timeseries(360, 6, 'nearest')
+        if p:
+            p.resample_all_timeseries(360, 6, 'nearest')
 
-                p.tag_unmatched(list(matched_mets.values()))
+            #p.tag_unmatched(list(matched_mets.values()))
 
-                v, keys = p.get_features('all')
-            
-                value_dicts += v
+            v, keys = p.get_features('all')
+        
+            value_dicts += v
 
-            else:
-                print('== failed to load patient:', pat)
         else:
-            print("== found no matching metastases for patient, skipped")
+            print('== failed to load patient:', pat)
+        # else:
+        #     print("== found no matching metastases for patient, skipped")
 
 
     with open(met_path/folder_name/'features.csv', 'w') as file:

@@ -87,9 +87,11 @@ def train(model, dataset, epochs=200, loss_function=F.cross_entropy, optimizer=a
         # train step
         model.train()
         for batch in train_loader:
-            size = batch.y.shape[1]
+            
             ## current weight vector        assign the weight at [0]              pad 0 to ignore other features
-            if weighted_loss: torch_weights_ = torch.tensor([[torch_weights.tolist()[sample.item()]]+[0]*(size-1) for sample in batch.rano], dtype=torch.float).to(device) if use_target_index else torch_weights # balance weights according to rano class even for regression
+            if weighted_loss: 
+                size = batch.y.shape[0]
+                torch_weights_ = torch.tensor([[torch_weights.tolist()[sample.item()]]+[0]*(size-1) for sample in batch.rano], dtype=torch.float).to(device) if use_target_index else torch_weights.to(device) # balance weights according to rano class even for regression
             else: torch_weights_ = None
             batch = batch.to(device)
             optimizer.zero_grad()
@@ -111,7 +113,9 @@ def train(model, dataset, epochs=200, loss_function=F.cross_entropy, optimizer=a
         if validation:
             model.eval()
             for batch in val_loader:
-                if weighted_loss: torch_weights_ = torch.tensor([[torch_weights.tolist()[sample.item()]]+[0]*(size-1) for sample in batch.rano], dtype=torch.float).to(device) if use_target_index else torch_weights
+                if weighted_loss: 
+                    size=batch.y.shape[0]
+                    torch_weights_ = torch.tensor([[torch_weights.tolist()[sample.item()]]+[0]*(size-1) for sample in batch.rano], dtype=torch.float).to(device) if use_target_index else torch_weights.to(device)
                 else: torch_weights_ = None
                 batch = batch.to(device)
                 out = model(batch)
@@ -159,7 +163,7 @@ def test_classification(model, dataset, working_dir, device='cuda'):
             batch.to(device)
             y = batch.y.cpu().numpy()
             out = model(batch)
-            confidence = out.cpu().numpy()
+            confidence = out.detach.cpu().numpy()
             assignment = out.argmax(dim=1).cpu().numpy()
             for pd, gt, conf in zip(assignment, y, confidence):
                 res = {'prediction': pd, 'target': gt, 'confidence':conf}

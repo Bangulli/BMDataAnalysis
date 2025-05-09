@@ -35,7 +35,7 @@ class SimplestGCN(torch.nn.Module):
     def forward(self, data):
         x, edge_index, edge_attr, edge_weights = data.x, data.edge_index, data.edge_attr, data.edge_weights
 
-        x = self.conv1(x, edge_index, edge_weights=edge_weights)
+        x = self.conv1(x, edge_index, edge_weight=edge_weights)
         #x = F.dropout(x, training=self.training)
         x = global_mean_pool(x, data.batch)
         return F.log_softmax(x, dim=1)

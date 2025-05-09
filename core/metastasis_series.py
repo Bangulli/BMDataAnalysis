@@ -167,6 +167,10 @@ class MetastasisTimeSeries():
         self.id = f"Metastasis {id}" if not id.startswith('Metastasis') else id
 
 ######## Public utils
+    def set_total_lesion_load_at_tp(self, count, load, tp):
+        assert tp in self.keys, f"timepoint must exist in this time series, didnt find {tp}"
+        self.time_series[tp].set_total_lesion_load(count, load)
+        
     def validate(self, raise_on_invalid=True):
         prev = None
         for k0, k1, k2  in zip(self.keys, list(self.time_series.keys()), list(self.dates.keys())):
@@ -410,6 +414,12 @@ class MetastasisTimeSeries():
         for i, d in enumerate(self.keys):
             value_dict[f"t{i}_volume"] = self.time_series[d].lesion_volume
         return value_dict
+    
+    def get_total_load(self):
+        value_dict = {}
+        for i, d in enumerate(self.keys):
+            value_dict[f"t{i}_global_lesion_load"] = self.time_series[d].load if hasattr(self.time_series[d], 'load') else None
+            value_dict[f"t{i}_global_lesion_count"] = self.time_series[d].count if hasattr(self.time_series[d], 'count') else None
 
 
 ######## Builtins  

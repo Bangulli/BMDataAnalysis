@@ -51,6 +51,7 @@ class Patient():
             self.studies = len(self.dates)
             self._set_metadata(load_mets)
             self.mets = self._load_mets()
+        self._assign_lesion_load()
 
     def print(self):
         """
@@ -154,8 +155,9 @@ class Patient():
                             cur_dict = {**cur_dict, 'Brain Volume': self.brain_volume}
 
                         ### future work
-                        if feature in ['all', 'dose']: # the dose innit
-                            pass
+                        if feature in ['all', 'total_load']: # the dose innit
+                            cur_dict = {**cur_dict, **ts.get_total_load()}
+                           
                         if feature in ['all', 'lesion_meta']: # location in brain, primary, etc
                             pass
                         if feature in ['all', 'deep_vector']: # encoded vector from vincents foundation model
@@ -274,6 +276,13 @@ class Patient():
         ts = parse_to_timeseries(mets_dict, self.dates_dict, treatments_dict, self.log)
         ts = {i:v for i,v in enumerate(ts)}
         return ts
+    
+    def _assign_lesion_load(self):
+        for tp in self.dates:
+            existing = [met.time_series[tp].lesion_volume for met in self.mets if tp in met.keys] # extract the lesion volume at timepoint if the lesion has the timepoint
+            count = len(existing)
+            load = sum(existing)
+            [met.set_total_lesion_load_at_tp(count, load, tp) for met in self.mets if tp in met.keys]
 
 
 

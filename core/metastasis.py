@@ -163,6 +163,10 @@ class Metastasis():
                             foregroundValue=1))
             return t1_radiomics
         else: return False
+
+    def set_total_lesion_load(self, count, load):
+        self.count=count
+        self.load=load
         
 
 

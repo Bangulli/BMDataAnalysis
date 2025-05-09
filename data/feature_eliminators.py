@@ -89,13 +89,24 @@ class FeatureCorrelationEliminator:
         return to_drop
     
 class LASSOFeatureEliminator:
+    def __init__(self, alpha=0.5):
+        self.alpha=alpha
     def __call__(self, data, target):
-        lasso = Lasso()
+        lasso = Lasso(alpha=self.alpha)
+        print(f"== fitting LASSO predictor with radiomics feature names in:")
+        [print(f"   - {c}") for c in data.columns if 'radiomics' in c]
+        print(f"== fitting LASSO predictor with feature names in:")
+        [print(f"   - {c}") for c in data.columns if not 'radiomics' in c]
         lasso.fit(data.fillna(0), target)
         eliminate_mask = lasso.coef_==0
+        
         to_drop = data.columns[eliminate_mask]
-        print(f'== LASSOFeatureEliminator wants to remove the following columns:')
-        [print(f"   - {c}") for c in to_drop]
+        # print(f'== LASSOFeatureEliminator wants to remove the following columns:')
+        # [print(f"   - {c}") for c in to_drop]
+        print("LASSO Coefficients:", lasso.coef_)
+        print("Non-zero Coefs:", np.count_nonzero(lasso.coef_))
+        print(f"== LSSOFeatureEliminator wants to keep the following columns:")
+        [print(f"   - {c}") for c in data.columns[lasso.coef_!=0]]
         return list(to_drop)
     
 class ModelFeatureEliminator:
