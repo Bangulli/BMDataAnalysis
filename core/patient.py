@@ -149,15 +149,13 @@ class Patient():
 
                         if feature in ['all', 'radiomics']:
                             cur_dict = {**cur_dict, **ts.get_radiomics()}
-                        
-                        ### expand
+
                         if feature in ['all', 'patient_meta']: # age sex weight height
                             cur_dict = {**cur_dict, 'Brain Volume': self.brain_volume}
 
-                        ### future work
-                        if feature in ['all', 'total_load']: # the dose innit
+                        if feature in ['all', 'total_load']: 
                             cur_dict = {**cur_dict, **ts.get_total_load()}
-                           
+                            
                         if feature in ['all', 'lesion_meta']: # location in brain, primary, etc
                             pass
                         if feature in ['all', 'deep_vector']: # encoded vector from vincents foundation model
@@ -279,10 +277,13 @@ class Patient():
     
     def _assign_lesion_load(self):
         for tp in self.dates:
-            existing = [met.time_series[tp].lesion_volume for met in self.mets if tp in met.keys] # extract the lesion volume at timepoint if the lesion has the timepoint
+            proc_tp = 'ses-'+tp[5:]
+            existing = [met.time_series[proc_tp].lesion_volume for k, met in self.mets.items() if proc_tp in met.keys and met.time_series[proc_tp].lesion_volume>0] # extract the lesion volume at timepoint if the lesion has the timepoint
             count = len(existing)
             load = sum(existing)
-            [met.set_total_lesion_load_at_tp(count, load, tp) for met in self.mets if tp in met.keys]
+            #print(f"found #{count} with combine volume {load}")
+            #print(existing)
+            [met.set_total_lesion_load_at_tp(count, load, proc_tp) for k, met in self.mets.items() if proc_tp in met.keys]
 
 
 

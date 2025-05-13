@@ -12,9 +12,11 @@ from visualization import *
 
 
 if __name__ == '__main__':
-    dataset_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED_lenient_inclusion')
+    dataset_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED')
     met_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502')
-    match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/229_Patients/task_502/metrics.csv')
+    folder_name = 'csv_nn_experiments' # folder in which the output is stored in the met_path directory
+    os.makedirs(met_path/folder_name, exist_ok=True)
+    #match_report = pl.Path('/home/lorenz/BMDataAnalysis/logs/229_Patients/task_502/metrics.csv')
     
     os.makedirs(met_path, exist_ok=True)
 
@@ -30,45 +32,16 @@ if __name__ == '__main__':
         p = Patient(dataset_path/pat, log=logger, met_dir_name='mets_task_502')
         p.validate()
         p.print()
+        print('== saving patient:', pat)
         p.save(met_path)
+        print('== resampling patient:', pat)
+        p.resample_all_timeseries(360, 6, 'nearest')
+        print('== extracting features for patient:', pat)
 
-    
+        v, keys = p.get_features('total_load')
+        print(f"got features {v} with names {keys}")
+        value_dicts += v
 
-    # if match_report.is_file():
-    #     match_report = pd.read_csv(match_report, sep=';', index_col=None) 
-    # else:
-    #     compare_segs(match_report, dataset_path, met_path)
-    #     match_report = pd.read_csv(match_report, sep=';', index_col=None)
-    folder_name = 'csv_nn' # folder in which the output is stored in the met_path directory
-    os.makedirs(met_path/folder_name, exist_ok=True)
-
-
-    parsed = [pat for pat in os.listdir(met_path) if pat.startswith('sub-PAT')]
-
-    ## load mets from preparsed store
-    value_dicts = []
-    for pat in parsed:
-        print('== loading patient:', pat)
-
-        # matched_mets = match_report.loc[match_report['patient_id']==pat, 'matched_mets'].to_list()
-        # if any(matched_mets[0]):
-        #     matched_mets = ast.literal_eval(matched_mets[0])
-        p = load_patient(met_path/pat)
-        p.validate()
-
-        if p:
-            p.resample_all_timeseries(360, 6, 'nearest')
-
-            #p.tag_unmatched(list(matched_mets.values()))
-
-            v, keys = p.get_features('all')
-        
-            value_dicts += v
-
-        else:
-            print('== failed to load patient:', pat)
-        # else:
-        #     print("== found no matching metastases for patient, skipped")
 
 
     with open(met_path/folder_name/'features.csv', 'w') as file:
@@ -84,8 +57,6 @@ if __name__ == '__main__':
     ranos = [k for k in df.columns if k.endswith('_rano') and not k.startswith('t0')]
     print(ranos)
     plot_sankey(df[ranos], met_path/folder_name, tag='all_')
-    matched = df.loc[df['RT_matched']==True, ranos]
-    plot_sankey(matched[ranos], met_path/folder_name, tag=f'{len(matched)}_matched_')
-    unmatched = df.loc[df['RT_matched']==False, ranos]
-    plot_sankey(unmatched[ranos], met_path/folder_name, tag=f'{len(unmatched)}_unmatched_')
    
+
+   ### patient 17 has no data, check that

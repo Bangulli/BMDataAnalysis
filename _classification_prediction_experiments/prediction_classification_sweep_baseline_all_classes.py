@@ -65,13 +65,12 @@ if __name__ == '__main__':
                                         interpolate_CR_swing_length=1,
                                         drop_CR_swing_length=2,
                                         normalize_volume='std',
-                                        save_processed=output/'used_data.csv')
+                                        save_processed=output.parent/'used_data.csv')
     
     dist = Counter(test_data['t6_rano'])
     inv_enc = {v:k for k,v in rano_encoding.items()}
     dist = {inv_enc[k]:v for k,v in dist.items()}
   
-    output = output_path/f'classification/{prediction_type}/{method}/featuretypes={used_features}_selection={feature_selection}'
     os.makedirs(output, exist_ok=True)
     with open(output/'used_feature_names.txt', 'w') as file:
         file.write("Used feature names left in the dataframe:\n")

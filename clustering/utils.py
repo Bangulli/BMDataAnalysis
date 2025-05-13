@@ -22,6 +22,15 @@ def filter_small_clusters(df, cluster_column, min_member_count):
     print(f"kept {valid_labels}, removed {invalid_labels}")
     return df_filtered, invalid_labels
 
+def filter_small_clusters_by_samplestats(df, cluster_column):
+    z = 1.65 # == 80% confidence, 1.65=90% confidence
+    e = 0.1 # == margin of error 10%
+    N = len(df) # popuöation  size
+    p = 0.5 # proportion
+    n = round((N*(z**2)*p*(1-p))/(e**2*(N-1)+(z**2)*p*(1-p)))
+    print(f"Computed the minimum clustersize for significant information with confidence 80% and margin of error 10% = {n} for a dataset size of {N}")
+    return filter_small_clusters(df, cluster_column, n)
+
 def wide_df_to_sktime_multiindex(df_wide):
     # df_wide: wide format with rows = subjects, cols = timepoints
     nested_df = pd.DataFrame(index=df_wide.index, columns=[0], dtype=object)

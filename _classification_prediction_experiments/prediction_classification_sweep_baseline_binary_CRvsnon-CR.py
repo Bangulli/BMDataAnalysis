@@ -25,11 +25,11 @@ from scipy.stats import zscore
 if __name__ == '__main__':
     data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/229_patients faulty/PARSED_METS_task_502/csv_nn/features.csv')
     prediction_type = '1v3'
-    feature_selection = 'LASSO'
+    feature_selection = None#'LASSO'
     method = 'LGBM'
     model = LGBMClassifier(class_weight='balanced')
     output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/baseline')
-    used_features = ['volume', 'radiomics']
+    used_features = ['volume']#, 'radiomics']
 
     if prediction_type == 'binary':
         rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
@@ -67,13 +67,12 @@ if __name__ == '__main__':
                                         interpolate_CR_swing_length=1,
                                         drop_CR_swing_length=2,
                                         normalize_volume='std',
-                                        save_processed=output/'used_data.csv')
+                                        save_processed=output.parent/'used_data.csv')
     
     dist = Counter(test_data['t6_rano'])
     inv_enc = {v:k for k,v in {'CR':0, 'non-CR':1}.items()}
     dist = {inv_enc[k]:v for k,v in dist.items()}
   
-    output = output_path/f'classification/{prediction_type}/{method}/featuretypes={used_features}_selection={feature_selection}'
     os.makedirs(output, exist_ok=True)
     with open(output/'used_feature_names.txt', 'w') as file:
         file.write("Used feature names left in the dataframe:\n")

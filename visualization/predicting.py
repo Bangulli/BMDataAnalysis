@@ -20,7 +20,20 @@ def plot_prediction_metrics_sweep(results, output, next_value_prefix='nxt', one_
         plt.figure(figsize=(max(8, num_keys * 1.5), 6))
         for i, metric in enumerate(metrics):
             values = [d[metric] for d in data_dicts]
-            plt.bar(x + i * bar_width, values, width=bar_width, label=metric, color=colors[i % len(colors)])
+            bars = plt.bar(x + i * bar_width, values, width=bar_width, label=metric, color=colors[i % len(colors)])
+
+            # Annotate each bar with its value
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    height,
+                    f"{height:.2f}",
+                    ha='center',
+                    va='top',
+                    fontsize=10,
+                    rotation=90  # Optional: rotate for better fit
+                )
 
         plt.xticks(x + bar_width * (num_metrics - 1) / 2, keys, rotation=45, ha='right')
         plt.xlabel("Input timepoints")
@@ -39,13 +52,14 @@ def plot_prediction_metrics_sweep(results, output, next_value_prefix='nxt', one_
         plt.clf()
 
     # --- Next Value Prediction ---
-    nxt_keys = [k for k in results if k.startswith(next_value_prefix)]
-    nxt_data = [results[k] for k in nxt_keys]
-    if nxt_data:
-        make_grouped_metric_plot(nxt_data, nxt_keys, "next_value", "Next Value Prediction Metrics")
-        if 'confusion_matrix' in nxt_data[0]:
-            matrices = [d['confusion_matrix'] for d in nxt_data]
-            plot_confusions(matrices, "next_value")
+    if next_value_prefix:
+        nxt_keys = [k for k in results if k.startswith(next_value_prefix)]
+        nxt_data = [results[k] for k in nxt_keys]
+        if nxt_data:
+            make_grouped_metric_plot(nxt_data, nxt_keys, "next_value", "Next Value Prediction Metrics")
+            if 'confusion_matrix' in nxt_data[0]:
+                matrices = [d['confusion_matrix'] for d in nxt_data]
+                plot_confusions(matrices, "next_value")
 
     # --- One Year Prediction ---
     yr_keys = [k for k in results if k.startswith(one_year_prefix)]
@@ -151,7 +165,20 @@ def plot_regression_metrics_sweep(results, output, tag='', next_value_prefix='nx
         for i, metric in enumerate(metrics):
             if metric.endswith('-sep'): continue
             values = [d[metric] for d in data_dicts]
-            plt.bar(x + i * bar_width, values, width=bar_width, label=metric, color=colors[i % len(colors)])
+            bars = plt.bar(x + i * bar_width, values, width=bar_width, label=metric, color=colors[i % len(colors)])
+
+            # Annotate each bar with its value
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    height,
+                    f"{height:.2f}",
+                    ha='center',
+                    va='top',
+                    fontsize=8,
+                    rotation=90  # Optional: rotate for better fit
+                )
 
         # X-ticks in the middle of the grouped bars
         plt.xticks(x + bar_width * (num_metrics - 1) / 2, [k.replace('_volume', '') for k in keys], rotation=45, ha='right')
@@ -169,7 +196,20 @@ def plot_regression_metrics_sweep(results, output, tag='', next_value_prefix='nx
         for i, metric in enumerate(metrics):
             if not metric.endswith('-sep'): continue
             values = [d[metric] for d in data_dicts]
-            plt.bar(x + i * bar_width, values, width=bar_width, label=metric, color=colors[i % len(colors)])
+            bars = plt.bar(x + i * bar_width, values, width=bar_width, label=metric, color=colors[i % len(colors)])
+
+            # Annotate each bar with its value
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    height,
+                    f"{height:.2f}",
+                    ha='center',
+                    va='top',
+                    fontsize=8,
+                    rotation=90  # Optional: rotate for better fit
+                )
 
         # X-ticks in the middle of the grouped bars
         plt.xticks(x + bar_width * (num_metrics - 1) / 2, [k.replace('_volume', '') for k in keys], rotation=45, ha='right')

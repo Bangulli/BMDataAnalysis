@@ -12,8 +12,7 @@ from sklearn.model_selection import train_test_split
 from visualization import *
 
 from lightgbm import LGBMClassifier
-from xgboost import XGBClassifier
-
+import torch_geometric.transforms as T
 from sklearn.datasets import make_regression
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.svm import SVC
@@ -33,51 +32,62 @@ from scipy.stats import zscore
 import warnings
 warnings.filterwarnings('ignore')
 
+class AddNoise(T.BaseTransform):
+    def __call__(self, data):
+        data.x = data.x + 0.01 * torch.randn_like(data.x)
+        data.edge_weights = data.edge_weights + 0.01 * torch.randn_like(data.edge_weights)
+        data.edge_attr = data.edge_attr + 0.01 * torch.randn_like(data.edge_attr)
+        return data
+
 if __name__ == '__main__':
 ########## setup
-    data_source = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/229_patients faulty/PARSED_METS_task_502/csv_nn/features.csv')
-    prediction_type = 'multi'
-    feature_selection = 'none'
-    method = 'simplest_GCN_batch'
-    output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/baselines/')
+    data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/229_patients faulty/PARSED_METS_task_502/csv_nn/features.csv')
+    prediction_type = '1v3'
+    feature_selection = None
+    method = 'SimplestGCN'
+    output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/baseline')
     used_features = ['volume', 'radiomics']
 
     if prediction_type == 'binary':
         rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
-        num_out=2
+        num_out=1
+    elif prediction_type == '1v3':
+        rano_encoding={'CR':0, 'PR':1, 'SD':1, 'PD':1}
+        num_out=1
     else:
         rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}
         num_out=4
-    
-    if feature_selection == 'lasso':
+
+    if feature_selection == 'LASSO':
         eliminator = d.LASSOFeatureEliminator()
-    if feature_selection == 'correlation':
+    elif feature_selection == 'correlation':
         eliminator = d.FeatureCorrelationEliminator()
-    if feature_selection == 'model':
+    elif feature_selection == 'model':
         eliminator = d.ModelFeatureEliminator()
     else:
         eliminator = None
 
     data_prefixes = ["t0", "t1", "t2", "t3", "t4", "t5", "t6"] # used in the training method to select the features for each step of the sweep
-    volume_cols = [c+'_volume' for c in data_prefixes] # used to normalize the volumes
-    rano_cols = [elem+'_rano' for elem in data_prefixes] # used in the training method to select the current targets
 
-    train_data, test_data = d.load_prepro_data(data_source,
-                                        used_features=['volume'],
+    output = output_path/f'classification/{prediction_type}/featuretypes={used_features}_selection={feature_selection}/{method}'
+    os.makedirs(output, exist_ok=True)
+
+    train_data, test_data = d.load_prepro_data(data,
+                                        used_features=used_features,
                                         test_size=0.2,
-                                        drop_suffix=None,
+                                        fill=0,
+                                        drop_suffix=eliminator,
                                         prefixes=data_prefixes,
                                         target_suffix='rano',
-                                        normalize_suffix=None,
-                                        rano_encoding={ 'CR': 0,'PR': 1,'SD': 2,'PD': 3 },
+                                        normalize_suffix=[f for f in used_features if f!='volume'],
+                                        rano_encoding=rano_encoding,
                                         time_required=True,
                                         interpolate_CR_swing_length=1,
                                         drop_CR_swing_length=2,
-                                        normalize_volume='frac',
-                                        save_processed=None)
+                                        normalize_volume='std',
+                                        save_processed=output.parent/'used_data.csv')
 
-    ## prepare output
-    output = output_path/f'classification_{prediction_type}_{method}_featuretypes={used_features}_selection={feature_selection}'
+
     os.makedirs(output, exist_ok=True)
     with open(output/'used_feature_names.txt', 'w') as file:
         file.write("Used feature names left in the dataframe:\n")
@@ -93,6 +103,11 @@ if __name__ == '__main__':
     torch_weights = 1.0 / (counts + 1e-6)  # Avoid divide by zero
     torch_weights = torch_weights / torch_weights.sum()  # Normalize (optional but nice)
 
+
+
+    train_transforms = T.Compose([AddNoise()])
+    test_transforms = None#T.Compose([T.LocalDegreeProfile(), T.GDC()])
+
     # make datasets
     dataset_train = d.BrainMetsGraphClassification(train_data,
         used_timepoints = ['t0', 't1', 't2', 't3', 't4', 't5'], 
@@ -100,9 +115,9 @@ if __name__ == '__main__':
         rano_encoding = rano_encoding,
         target_name = 't6_rano',
         extra_features = None,
-        fully_connected=False,
+        fully_connected=True,
         direction=None,
-        transforms = None,
+        transforms = train_transforms,
         )
     dataset_test = d.BrainMetsGraphClassification(test_data,
         used_timepoints = ['t0', 't1', 't2', 't3', 't4', 't5'], 
@@ -110,14 +125,17 @@ if __name__ == '__main__':
         rano_encoding = rano_encoding,
         target_name = 't6_rano',
         extra_features = None,
-        fully_connected=False,
-        transforms = None,
+        fully_connected=True,
+        transforms = test_transforms,
         direction = None
         )
 
     # init training variables
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = SimplestGCN(num_out, dataset_train.get_node_size()).to(device)
+    if method == 'SimplestGCN':
+        model = SimplestGCN(num_out, dataset_train.get_node_size()).to(device)
+    else:
+        raise RuntimeError(f"Unrecognized method name, cant resolve correct model for {method}")
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
@@ -129,19 +147,20 @@ if __name__ == '__main__':
     # run training
     best_model, best_loss = torch_engine.train(model, 
                                     dataset= dataset_train, 
-                                    loss_function=F.cross_entropy,
-                                    epochs=500,
+                                    loss_function=F.cross_entropy if num_out>1 else F.binary_cross_entropy_with_logits,
+                                    epochs=1000,
                                     optimizer=optimizer,
                                     scheduler=scheduler,
                                     working_dir=output,
                                     device=device,
                                     validation=0.25,
-                                    batch_size=64
+                                    batch_size=64,
+                                    weighted_loss=False
                                     )
     print(f"Best model achieved loss {best_loss:4f}")
 
     # evaluate
-    best_res = torch_engine.test_classification(best_model, dataset_test, output, device)
+    best_res = torch_engine.test_classification(best_model, dataset_test, output, device, rano_encoding, num_out==1)
     print(f"""Best model achieved a class weight balanced accuracy {best_res['balanced_accuracy']:4f}""")
     print(best_res['classification_report'])
 

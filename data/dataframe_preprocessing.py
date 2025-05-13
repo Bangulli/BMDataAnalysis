@@ -44,7 +44,8 @@ def load_prepro_data(path,
     if save_processed is not None:
         if (save_processed.parent/('train_'+save_processed.name)).is_file(): 
             print('found preprocessed dataframes, loading tem instead of doing all the shabang again')
-            return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), pd.read_csv(save_processed.parent/('test_'+save_processed.name))
+            if test_size is not None: return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), pd.read_csv(save_processed.parent/('test_'+save_processed.name))
+            else: return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), None
 
     df = pd.read_csv(path, index_col='Lesion ID') # load
     if fill is not None: df.fillna(fill, inplace=True) # fill
@@ -114,7 +115,7 @@ def load_prepro_data(path,
 
     ## dataset splitting
     labels = [d[f'{prefixes[-1]}_{target_suffix}'] for i, d in df.iterrows()]
-    df, test = train_test_split(df, test_size=test_size, random_state=42, stratify=labels)
+    if test_size is not None: df, test = train_test_split(df, test_size=test_size, random_state=42, stratify=labels)
 
     # normalize volume feature
     if normalize_volume:
@@ -129,7 +130,7 @@ def load_prepro_data(path,
                 fmt = "({}*"+str(std)+"+"+str(mean)+")"
 
                 # on testset
-                test[volume_cols] = (test[volume_cols]-mean).div(std)
+                if test_size is not None: test[volume_cols] = (test[volume_cols]-mean).div(std)
 
             ## normalize all volumes by the same factor
             elif mode == 'max':
@@ -139,7 +140,7 @@ def load_prepro_data(path,
                 fmt="({}*"+str(factor)+")"
 
                 # on testset
-                test[volume_cols] = test[volume_cols].div(factor)# normalize follow up volume
+                if test_size is not None: test[volume_cols] = test[volume_cols].div(factor)# normalize follow up volume
                 
             ## normalize asll volumes by the whole brain volume of the respective series
             elif mode == 'log':
@@ -148,7 +149,7 @@ def load_prepro_data(path,
                 fmt="(np.expm1({}))"
 
                 # on testset
-                test[volume_cols] =  np.log1p(test[volume_cols])
+                if test_size is not None: test[volume_cols] =  np.log1p(test[volume_cols])
 
             
             ## normalize time series volume by the baseline volume
@@ -158,7 +159,7 @@ def load_prepro_data(path,
                 df[volume_cols] = df[volume_cols].div(df[volume_cols[0]], axis=0) # normalize follow up volume
                 # on testset
                 fmt = ["({}*"+str(f)+")" for f in test[volume_cols[0]].tolist()] # generate reverter first before norming
-                test[volume_cols] = test[volume_cols].div(test[volume_cols[0]], axis=0) # normalize follow up volume
+                if test_size is not None: test[volume_cols] = test[volume_cols].div(test[volume_cols[0]], axis=0) # normalize follow up volume
                 
             
             elif mode == '3root':
@@ -167,7 +168,7 @@ def load_prepro_data(path,
                 fmt = "({}**3)"
 
                 # on testset
-                test[volume_cols] = test[volume_cols]**(1/3) # normalize follow up volume
+                if test_size is not None: test[volume_cols] = test[volume_cols]**(1/3) # normalize follow up volume
 
         
             else: raise ValueError(f"Unrecognized volume normalization mode {normalize_volume}")
@@ -175,11 +176,11 @@ def load_prepro_data(path,
             ## accumulate decode functions
             if step == 0:
                 if isinstance(fmt, list):
-                    test['ignored_vol_normalizer'] = fmt
+                    if test_size is not None: test['ignored_vol_normalizer'] = fmt
                     df['ignored_vol_normalizer'] = train_fmt
 
                 else:
-                    test['ignored_vol_normalizer'] = [fmt]*len(test)
+                    if test_size is not None: test['ignored_vol_normalizer'] = [fmt]*len(test)
                     df['ignored_vol_normalizer'] = [fmt]*len(df)
          
             else:
@@ -187,7 +188,7 @@ def load_prepro_data(path,
                 if isinstance(fmt, list):
             
                     for j, id in enumerate(test.index):
-                        test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt[j])
+                        if test_size is not None: test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt[j])
                  
   
                     for j, id in enumerate(df.index):
@@ -196,7 +197,7 @@ def load_prepro_data(path,
                 else:
             
                     for j, id in enumerate(test.index):
-                        test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt)
+                        if test_size is not None: test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt)
                   
               
                     for j, id in enumerate(df.index):
@@ -219,7 +220,7 @@ def load_prepro_data(path,
                         mean = df[col].mean()   
                         print(f'standardizing {col} with mean {mean} and std {std}')
                         df[col]=(df[col]-mean).div(std) # try to parse every value to floats
-                        test[col]=(test[col]-mean).div(std)
+                        if test_size is not None: test[col]=(test[col]-mean).div(std)
                     elif col in normalize_suffix and col not in processed_cols:
                         processed_cols.append(col)
                         df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -228,14 +229,14 @@ def load_prepro_data(path,
                         mean = df[col].mean()   
                         print(f'standardizing {col} with mean {mean} and std {std}')
                         df[col]=(df[col]-mean).div(std) # try to parse every value to floats
-                        test[col]=(test[col]-mean).div(std)
+                        if test_size is not None: test[col]=(test[col]-mean).div(std)
 
         if fill is not None: df.fillna(fill, inplace=True)
-        if fill is not None: test.fillna(fill, inplace=True)
+        if fill is not None and test_size is not None: test.fillna(fill, inplace=True)
                     
     else: print('No feature normalization is applied aside from volume')
     
-    ## drop unused features
+    ## drop unused feature types
     to_keep = []
     used_features = [*used_features, 'timedelta_days'] if time_required else used_features
     for col in df.columns:
@@ -248,8 +249,9 @@ def load_prepro_data(path,
                 if col in used_features:
                     to_keep.append(col)
     ([df.drop(columns=c, inplace=True, axis=0) for c in df.columns if c not in to_keep])
-    ([test.drop(columns=c, inplace=True, axis=0) for c in test.columns if c not in to_keep])
+    if test_size is not None: ([test.drop(columns=c, inplace=True, axis=0) for c in test.columns if c not in to_keep])
 
+    ## drop rejected features
     to_drop = [] # to avoid variable not assigned error
     if isinstance(drop_suffix, list):
         # drop ignored cols
@@ -277,29 +279,33 @@ def load_prepro_data(path,
     else:
         print("No features are ignored")
 
+    if time_required: to_drop = [c for c in to_drop if not c.endswith('timedelta_days')]
+
     print(f"Had {len(df.columns)} in the beginning")
     df.drop(columns=to_drop, inplace=True, errors='ignore')
-    test.drop(columns=to_drop, inplace=True, errors='ignore')
+    if test_size is not None: test.drop(columns=to_drop, inplace=True, errors='ignore')
     print(f"left with {len(df.columns)} features (not accounted for gt and misc cols in the data)")
 
     print('Training Set')
     print(df.describe())
     df.info()
 
-    print('Testing Set')
-    print(test.describe())
-    test.info()
+    if test_size is not None:
+        print('Testing Set')
+        print(test.describe())
+        test.info()
 
     if add_index_as_col:
         df['Lesion ID'] = df.index
-        test['Lesion ID'] = test.index
+        if test_size is not None: test['Lesion ID'] = test.index
 
     if save_processed is not None:
-        df.to_csv(save_processed.parent/('train_'+save_processed.name))
-        test.to_csv(save_processed.parent/('test_'+save_processed.name))
+        df.to_csv(save_processed.parent/('train_'+save_processed.name), index=True)
+        if test_size is not None: test.to_csv(save_processed.parent/('test_'+save_processed.name), index=True)
     
     
-    return df, test
+    if test_size is not None: return df, test
+    else: return df, None
 
 def feature_selection(data, target_suffix, prefixes, eliminator=FeatureCorrelationEliminator(0.9), rano_encoding = {'CR':0, 'PR':1, 'SD':2, 'PD':3}, time_required=True):
     ### organize the dataframe such that it ignores timepoints

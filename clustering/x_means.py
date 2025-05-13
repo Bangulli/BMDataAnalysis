@@ -13,10 +13,12 @@ class TimeSeriesXMeans():
         self.random_seed = random_seed
         
     def fit(self, X, y=None):
+        print("== infering cluster count with xmeans")
         clusterer = TimeSeriesKMeans(2, metric=self.metric, random_state=self.random_seed)
         clusterer.fit(X)
         k = 3
         while k <= self.k_max:
+            print(f"trying {k} clusters")
             init = self._try_splits(X, clusterer)
             if len(clusterer.cluster_centers_) == len(init):
                 return clusterer, k

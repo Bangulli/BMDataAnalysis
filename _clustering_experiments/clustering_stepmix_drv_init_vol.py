@@ -19,14 +19,14 @@ import warnings
 warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
-    method_name = 'stepmix'
+    method_name = 'stepmix_drv_init_vol'
     folder_name = 'final_clusters'
     basedir = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502'
-    use_derivatives = False
+    use_derivatives = True
     split_by_vol = False # can be false for no splitting, 'quantile' for quantile splitting, 'meanshift' for using a meanshift to split
 
     train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
-                                    used_features=['volume'],
+                                    used_features=['volume', 'init_volume'],
                                     test_size=None,
                                     drop_suffix=None,
                                     prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
@@ -73,6 +73,7 @@ if __name__ == '__main__':
 
     else: subsets= {f'all n_samples{len(all_data)}':all_data} # use all data
 
+    
     for tag, complete_data in subsets.items():
         output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
 
@@ -103,7 +104,7 @@ if __name__ == '__main__':
 
             data_cols = list(derivatives.columns)+data_cols
 
-
+        data_cols += ['init_volume']
 
         ##### ------------------ MAKE CHANGES HERE -------------------------------------
         ## Do the clustering
@@ -147,7 +148,7 @@ if __name__ == '__main__':
 
         if use_derivatives:
             output = output.parent.parent/(output.parent.name+'_deriv')/output.name
-            data_cols = ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"] # overwrite the columns so it plots just the trajectory not the derivatives
+            data_cols = ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume", "init_volume"] # overwrite the columns so it plots just the trajectory not the derivatives
 
         output = output.parent/(output.name+str(best_k))
 

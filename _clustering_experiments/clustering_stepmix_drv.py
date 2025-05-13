@@ -19,10 +19,10 @@ import warnings
 warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
-    method_name = 'stepmix'
+    method_name = 'stepmix_drv'
     folder_name = 'final_clusters'
     basedir = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502'
-    use_derivatives = False
+    use_derivatives = True
     split_by_vol = False # can be false for no splitting, 'quantile' for quantile splitting, 'meanshift' for using a meanshift to split
 
     train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),

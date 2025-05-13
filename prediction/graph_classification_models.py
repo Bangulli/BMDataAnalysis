@@ -11,15 +11,26 @@ class GCN(torch.nn.Module):
     def __init__(self, num_classes, num_node_features):
         super().__init__()
         self.conv1 = GCNConv(num_node_features, 16)
-        self.fcn1 = Linear(16, num_classes)
+        self.conv2 = GCNConv(16, 32)
+        self.conv3 = GCNConv(32,64)
+        self.fcn1 = Linear(64, num_classes)
 
     def forward(self, data):
-        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
+        x, edge_index, edge_attr, edge_weight = data.x, data.edge_index, data.edge_attr, data.edge_weights
 
-        x = self.conv1(x, edge_index)
+        x = self.conv1(x, edge_index, edge_weight)
         x = F.relu(x)
-        #x = F.dropout(x, training=self.training)
+        x = F.dropout(x, training=self.training)
+
+        x = self.conv2(x, edge_index, edge_weight)
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training)
+
+        x = self.conv3(x, edge_index, edge_weight)
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training)
         x = global_mean_pool(x, data.batch)
+
         x = self.fcn1(x)
 
         return F.log_softmax(x, dim=1)
@@ -31,14 +42,16 @@ class SimplestGCN(torch.nn.Module):
     def __init__(self, num_classes, num_node_features):
         super().__init__()
         self.conv1 = GCNConv(num_node_features, num_classes)
+        self.num_classes = num_classes
 
     def forward(self, data):
         x, edge_index, edge_attr, edge_weights = data.x, data.edge_index, data.edge_attr, data.edge_weights
-
         x = self.conv1(x, edge_index, edge_weight=edge_weights)
-        #x = F.dropout(x, training=self.training)
         x = global_mean_pool(x, data.batch)
-        return F.log_softmax(x, dim=1)
+        if self.num_classes == 1:
+            return x.view(-1)  # Shape [batch_size], raw logits
+        else:
+            return x
     
     def save(self, path):
         torch.save(self, path/'SimplestGCN.pkl')

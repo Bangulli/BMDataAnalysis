@@ -66,7 +66,7 @@ def parse_to_timeseries(mets_dict: dict, dates_dict: dict, treatments_dict:dict,
                 time_series_list.append(t)
 
 
-        log.tagged_print('INFO', f'Parsed study {d}, found {len(mets_dict[d])} metastases: {new} new mets and attached {existing} to existing metastasis series', inf)
+        log.tagged_print('INFO', f'Parsed study {d}, found {len(mets_dict[d])} metastases: {new if treatments_dict[d] else 0} new mets and attached {existing} to existing metastasis series', inf)
 
     return time_series_list
 
@@ -176,7 +176,7 @@ class MetastasisTimeSeries():
         for k0, k1, k2  in zip(self.keys, list(self.time_series.keys()), list(self.dates.keys())):
             if not k0==k1==k2:
                 print(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
-                if raise_on_invalid: raise RuntimeError(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
+                #if raise_on_invalid: raise RuntimeError(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
             if prev is None:
                 prev = self.dates[k2]
             else:
@@ -420,6 +420,7 @@ class MetastasisTimeSeries():
         for i, d in enumerate(self.keys):
             value_dict[f"t{i}_global_lesion_load"] = self.time_series[d].load if hasattr(self.time_series[d], 'load') else None
             value_dict[f"t{i}_global_lesion_count"] = self.time_series[d].count if hasattr(self.time_series[d], 'count') else None
+        return value_dict
 
 
 ######## Builtins  
