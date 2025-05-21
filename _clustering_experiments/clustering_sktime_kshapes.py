@@ -14,33 +14,33 @@ import os
 from visualization import *
 from clustering import *
 from stepmix.stepmix import StepMix
-
+import copy
 import warnings
 warnings.filterwarnings('ignore')
 
-if __name__ == '__main__':
-    method_name = 'stepmix_drv_init_vol'
-    folder_name = 'final_clusters'
-    basedir = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502'
-    use_derivatives = True
-    split_by_vol = False # can be false for no splitting, 'quantile' for quantile splitting, 'meanshift' for using a meanshift to split
 
-    train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
-                                    used_features=['volume', 'init_volume'],
-                                    test_size=None,
-                                    drop_suffix=None,
-                                    prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
-                                    target_suffix='rano',
-                                    normalize_suffix=None,
-                                    rano_encoding=None,
-                                    time_required=False,
-                                    interpolate_CR_swing_length=1,
-                                    drop_CR_swing_length=2,
-                                    normalize_volume=None,
-                                    add_index_as_col = True,
-                                    save_processed=None)#pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/clustering_prerpocessed.csv'))
+
+if __name__ == '__main__':
+    method_name = 'tskshapes'
+    folder_name = 'final_clusters'
+    use_derivatives = False
+    split_by_vol = False
+    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
+                                used_features=['volume'],
+                                test_size=None,
+                                drop_suffix=None,
+                                prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
+                                target_suffix='rano',
+                                normalize_suffix=None,
+                                rano_encoding=None,
+                                time_required=False,
+                                interpolate_CR_swing_length=1,
+                                drop_CR_swing_length=2,
+                                normalize_volume=None,
+                                add_index_as_col = True,
+                                save_processed=None)#pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/clustering_prerpocessed.csv'))
     
-    all_data = pd.concat((train, test), axis=0)
+    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_')
     
     if not split_by_vol: subsets={f'all n_samples{len(all_data)}':all_data} # use all data
     elif split_by_vol=='meanshift':
@@ -73,7 +73,6 @@ if __name__ == '__main__':
 
     else: subsets= {f'all n_samples{len(all_data)}':all_data} # use all data
 
-    
     for tag, complete_data in subsets.items():
         output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
 
@@ -104,51 +103,38 @@ if __name__ == '__main__':
 
             data_cols = list(derivatives.columns)+data_cols
 
-        data_cols += ['init_volume']
+            derivative_cols = list(derivatives.columns)
 
         ##### ------------------ MAKE CHANGES HERE -------------------------------------
-        ## Do the clustering
-        if not isinstance(k, int):
-            best_cluster = None
-            best_aic = np.inf
-            best_bic = np.inf
-            best_k = 1
-            for c_k in k:
-                cluster = StepMix(n_components=c_k, measurement='continuous', structural='continuous', random_state=42)
-                cluster.fit(complete_data[data_cols])
+        fmt = wide_df_to_3d_np(copy.deepcopy(complete_data[data_cols]))
+        
+        if use_derivatives:
+            drv = wide_df_to_3d_np(copy.deepcopy(derivatives))
 
-                aic = cluster.aic(complete_data[data_cols])
-                bic = cluster.bic(complete_data[data_cols])
-                print(f'Output achieved an AIC of {aic} and a BIC of {bic}')
+            fmt = np.concatenate((fmt, drv), axis=-1)
 
-                if best_aic > aic and best_bic > bic:
-                    best_bic = bic
-                    best_aic = aic
-                    best_cluster = cluster
-                    best_k = c_k
-                    print('updated best k', best_k)
-        else:
-            best_cluster = StepMix(n_components=k, measurement='continuous', structural='continuous', random_state=42)
-            best_cluster.fit(complete_data[data_cols])
-            best_k = k
-            best_aic = best_cluster.aic(complete_data[data_cols])
-            best_bic = best_cluster.bic(complete_data[data_cols])
+        best_cluster = TimeSeriesKShapes(n_clusters=k)
+        best_cluster = best_cluster.fit(fmt)
+        best_k = k
+
+        best_bic, best_aic = good_approx_bic_aic(complete_data[data_cols], best_cluster.labels_, best_k)
+        
         ##### ------------------ MAKE CHANGES HERE -------------------------------------
 
 
-        labels = best_cluster.predict(complete_data[data_cols])
+        labels = best_cluster.labels_
 
         complete_data['cluster'] = labels
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
-        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 0)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
+        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 0)
 
-        DB_score = sklearn.metrics.davies_bouldin_score(filtered_data[data_cols], filtered_data['cluster'])
+        DB_score = sklearn.metrics.davies_bouldin_score(complete_data[data_cols], complete_data['cluster'])
         print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')
 
         if use_derivatives:
             output = output.parent.parent/(output.parent.name+'_deriv')/output.name
-            data_cols = ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume", "init_volume"] # overwrite the columns so it plots just the trajectory not the derivatives
+            data_cols = ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"] # overwrite the columns so it plots just the trajectory not the derivatives
 
         output = output.parent/(output.name+str(best_k))
 

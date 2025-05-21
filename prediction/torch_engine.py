@@ -74,7 +74,8 @@ def train(model, dataset, epochs=200, loss_function=F.cross_entropy, optimizer=a
         file.write(f"""Epochs: {epochs} \n""")
         file.write(f"""Training Batche size: {batch_size} \n""")
         file.write(f"Model config: {model}")
-        file.write(f"Paradigm: using {dataset.used_timepoints} to predict {dataset.target_name}")
+        if hasattr(dataset, 'used_timepoints'): file.write(f"Paradigm: using {dataset.used_timepoints} to predict {dataset.target_name}")
+        elif hasattr(dataset, 'used_timedelta'): file.write(f"Paradigm: using noisy data with a cutoff time at {dataset.used_timedelta} days after treatment to predict {dataset.target_name}, at 360 days after treatment")
 
 
 

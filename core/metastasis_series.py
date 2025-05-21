@@ -422,6 +422,18 @@ class MetastasisTimeSeries():
             value_dict[f"t{i}_global_lesion_count"] = self.time_series[d].count if hasattr(self.time_series[d], 'count') else None
         return value_dict
 
+    def get_location_in_brain(self):
+        t0_met = self.time_series[self.keys[0]]
+        return {'lesion_location': t0_met.get_location_in_brain()}
+    
+    def get_deep_vectors(self):
+        deep_dict = {}
+        for i, d in enumerate(self.keys):
+            print(f'=== working on t{i}')
+            vector = self.time_series[d].get_t1_deep_vector()
+            for j, v in enumerate(vector):
+                deep_dict[f"t{i}_deep_{j}"] = v
+        return deep_dict
 
 ######## Builtins  
     def __getitem__(self, idx):

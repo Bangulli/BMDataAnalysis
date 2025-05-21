@@ -5,6 +5,17 @@ import os
 import pathlib as pl
 from radiomics import featureextractor
 import logging
+import sys
+from pathlib import Path
+import torch
+import torch.nn as nn
+import monai.transforms as mt
+from torchvision import models, transforms
+import nibabel as nib
+
+# Add parent directory to sys.path so i can import ants localy. cause its not visible otherwise
+sys.path.append(str(Path(__file__).resolve().parent))
+from atlas import find_regions
 
 radiomics_logger = logging.getLogger("radiomics")
 radiomics_logger.setLevel(logging.CRITICAL)
@@ -41,6 +52,7 @@ def load_metastasis(path):
 def generate_interpolated_met_from_met(met):
     i_met = InterpolatedMetastasis(met.lesion_volume)
     return i_met
+
 
 class Metastasis():
     """
@@ -167,6 +179,60 @@ class Metastasis():
     def set_total_lesion_load(self, count, load):
         self.count=count
         self.load=load
+
+    def get_location_in_brain(self):
+        _, lbl = find_regions(self.t1_path, self.binary_source, self.t1_path.parent.parent.parent/'whole_brain.nii.gz')
+        if lbl: return lbl[0]
+        else: return None
+
+    def get_t1_deep_vector(self, model_name='efficientnet_b0', device='cuda' if torch.cuda.is_available() else 'cpu'):
+        """
+        Loads a NIfTI image and returns a feature vector using an EfficientNet backbone.
+
+        Args:
+            
+            model_name (str): Name of EfficientNet variant ('efficientnet_b0' ... 'efficientnet_b7').
+            device (str): 'cuda' or 'cpu'
+
+        Returns:
+            list: Feature vector as a list of floats.
+        """
+        # Load NIfTI image
+        nii = nib.load(self.t1_path)
+        volume = nii.get_fdata()
+
+        # Collapse to a 2D image (e.g., middle axial slice)
+        mid_slice = volume.shape[2] // 2
+        image = volume[:, :, mid_slice]
+        image = np.clip(image, np.percentile(image, 1), np.percentile(image, 99))  # Intensity normalization
+        image = (image - image.min()) / (image.max() - image.min())  # [0, 1]
+        image = (image * 255).astype(np.uint8)
+
+        # Convert to 3-channel RGB
+        image_3ch = np.stack([image] * 3, axis=-1)
+
+        # Define preprocessing transform
+        preprocess = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((224, 224)),  # EfficientNet default
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],  # ImageNet stats
+                                std=[0.229, 0.224, 0.225])
+        ])
+
+        # Apply transform
+        input_tensor = preprocess(image_3ch).unsqueeze(0).to(device)
+
+        # Load EfficientNet backbone
+        model = getattr(models, model_name)(pretrained=True)
+        model.classifier = nn.Identity()  # Remove classification head
+        model.eval()
+        model.to(device)
+
+        # Extract features
+        with torch.no_grad():
+            features = model(input_tensor)
+
+        return features.squeeze().cpu().numpy().tolist()
         
 
 

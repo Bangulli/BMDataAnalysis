@@ -4,8 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 from .evaluation import classification_evaluation
+import torch
+import pathlib as pl
 
-def train_classification_model_sweep(model, df_train, df_test, data_prefixes, prediction_targets, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}):
+def train_classification_model_sweep(model, df_train, df_test, data_prefixes, prediction_targets, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}, working_dir=pl.Path('./'), extra_data=[]):
     """
     Trains a sweep set of models to provided data.
     sweep == sweeps over the set and trains multiple possible configurations by training different feature configs to predict the next in time and 1 year response
@@ -24,10 +26,12 @@ def train_classification_model_sweep(model, df_train, df_test, data_prefixes, pr
     for i in range(1, len(prediction_targets)):
 
         features = [d for d in df_train.columns if d not in prediction_targets and d.split('_')[0] in data_prefixes[:i]]
+        features += extra_data
 
         key_next = f"nxt_{data_prefixes[:i]}->{prediction_targets[i]}"
         key_year = f"1yr_{data_prefixes[:i]}->{prediction_targets[-1]}"
         if verbose: print(f'Training configuration {i}: {key_next} & {key_year}')
+        if verbose: print(f"using nontimepoint features {extra_data}")
         if verbose: [print(f"used feature: {c}") for c in features]
         if verbose: print(f"target variable are: {prediction_targets[-1]} for one year and {prediction_targets[i]} for next value")
 
@@ -43,16 +47,20 @@ def train_classification_model_sweep(model, df_train, df_test, data_prefixes, pr
         gt_next = df_test[prediction_targets[i]]
         gt_year = df_test[prediction_targets[-1]]
 
-        if verbose: print("== Training next value predictor")
-        models[key_next].fit(X_train, y_next)
+        # if verbose: print("== Training next value predictor")
+        # models[key_next].fit(X_train, y_next)
+        # if verbose: print("== Saving next value predictor")
+        # torch.save(models[key_next], working_dir/(key_next+'_model.pkl'))
 
-        if verbose: print("=== evaluating...")
-        pd_next = models[key_next].predict(X_test)
-        quant_results[key_next] = classification_evaluation(gt_next, pd_next, rano_encoding)
-        if verbose: print(f"=== Next Value Model {key_next} achieved results {quant_results[key_next]} for quantity")
+        # if verbose: print("=== evaluating...")
+        # pd_next = models[key_next].predict(X_test)
+        # quant_results[key_next] = classification_evaluation(gt_next, pd_next, rano_encoding)
+        # if verbose: print(f"=== Next Value Model {key_next} achieved results {quant_results[key_next]} for quantity")
 
         if verbose: print("== Training year predictor")
         models[key_year].fit(X_train, y_year)
+        if verbose: print("== Saving next value predictor")
+        torch.save(models[key_year], working_dir/(key_year+'_model.pkl'))
 
         if verbose: print("=== evaluating...")
         pd_year = models[key_year].predict(X_test)

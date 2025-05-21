@@ -26,7 +26,7 @@ from scripts.compare_segs import *
 if __name__ == '__main__':
     processed_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED')
     met_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502') # location of preparsed metastases
-    folder_name = 'csv_nn'
+    folder_name = 'csv_uninterpolated'
     os.makedirs(met_path/folder_name, exist_ok=True)
     parsed = [pat for pat in os.listdir(met_path) if pat.startswith('sub-PAT')]
 
@@ -37,26 +37,6 @@ if __name__ == '__main__':
         print('== loading patient:', pat)
         p = load_patient(met_path/pat)
         if not p: continue # load patient returns false if loading fails. it can happen for various reasons and definitely needs some improvements to robustness, starting from the saving function, since it sometimes leaves empty directories, which shouldnt happen
-        print('== resampling patient:', pat)
-        p.resample_all_timeseries(360, 6, 'nearest')
-        print('== extracting features for patient:', pat)
-        v, keys = p.get_features('deep')
-        if keys: all_keys += [k for k in keys if k not in all_keys] # this is going to cost a lot of time but is necessary for noninterpolated extraction, because the feature dicts will be of variable length so the csv dict writer needs to get all feature keys to make sure it works
-        value_dicts += v
-    
-    ## write data to csv
-    with open(met_path/folder_name/'deep_features_interpolated.csv', 'w') as file:
-        print(f'== extracted {len(keys)} features for {len(value_dicts)} metastases, writing to file...')
-        header = all_keys
-        writer = csv.DictWriter(file, fieldnames=header)
-        writer.writeheader()
-        for d in value_dicts:
-            writer.writerow(d)
-        print('== done')
-        
-    # df = pd.read_csv(met_path/folder_name/'features.csv')
-    # ranos = [k for k in df.columns if k.endswith('_rano') and not k.startswith('t0')]
-    # print(ranos)
-    # plot_sankey(df[ranos], met_path/folder_name, tag='all_')
+
 
    

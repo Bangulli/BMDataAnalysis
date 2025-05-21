@@ -31,6 +31,7 @@ if __name__ == '__main__':
                                     drop_suffix=None,
                                     prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
                                     target_suffix='rano',
+                                    categorical=[],
                                     normalize_suffix=None,
                                     rano_encoding=None,
                                     time_required=False,

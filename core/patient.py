@@ -94,12 +94,25 @@ class Patient():
         """
         self.mets = {i:met.resample(timeframe_days, timepoints, method) for i, met in self.mets.items()}
 
+    def drop_short_timeseries(self, min_length_days=360):
+        """
+        applies the resampling to all metastases in the patient
+        """
+        self.mets = {i:met for i, met in self.mets.items() if met.get_observation_days()>=min_length_days}
+
     def discard_unmatched(self, matched:list):
+        """
+        In case the matching to RT is used, drop metastases that are not matched
+        """
         initial = len(self.mets)
         self.mets = {i:met for i,met in self.mets.items() if met.id in matched}
         print(f"discarded {initial-len(self.mets)} metastases series, kept metastses: {[met for met in list(self.mets.keys())]}")
     
     def tag_unmatched(self, matched:list):
+        """
+        In case the matching to RT is used, tag metastases that are not matched
+        This is later a feature in the data extraction
+        """
         print('tagging matched metastases', matched)
         for i in list(self.mets.keys()):
             if self.mets[i] is not None: self.mets[i].set_match(self.mets[i].id in matched)
@@ -123,8 +136,8 @@ class Patient():
         dict_list = []
         keys = None
         for i, ts in self.mets.items():
-            print(f'== working on {i}')
-            try:
+                print(f'== working on Metastasis {i}')
+            #try:
                 if ts is not None:
                     
                     cur_dict = {}
@@ -157,17 +170,18 @@ class Patient():
                             cur_dict = {**cur_dict, **ts.get_total_load()}
                             
                         if feature in ['all', 'lesion_meta']: # location in brain, primary, etc
-                            pass
-                        if feature in ['all', 'deep_vector']: # encoded vector from vincents foundation model
-                            pass
+                            cur_dict = {**cur_dict, **ts.get_location_in_brain()}
+
+                        if feature in ['all', 'deep']: # encoded vector from vincents foundation model
+                            cur_dict = {**cur_dict, **ts.get_deep_vectors()}
                     
                     dict_list.append(cur_dict)
 
                     if keys is None:
                         keys = list(cur_dict.keys())
-            except Exception as e:
-                print(f"==== Exception occured while processing: {e}")
-                print(f"==== Skipping extraction for {i}")
+            # except Exception as e:
+            #     print(f"==== Exception occured while processing: {e}")
+            #     print(f"==== Skipping extraction for {i}")
 
         if get_keys: return dict_list, keys
         else: return dict_list

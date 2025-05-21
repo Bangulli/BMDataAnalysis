@@ -10,6 +10,7 @@ from torch_geometric.nn import NNConv
 class GCN(torch.nn.Module):
     def __init__(self, num_classes, num_node_features):
         super().__init__()
+        self.num_classes=num_classes
         self.conv1 = GCNConv(num_node_features, 16)
         self.conv2 = GCNConv(16, 32)
         self.conv3 = GCNConv(32,64)
@@ -33,7 +34,10 @@ class GCN(torch.nn.Module):
 
         x = self.fcn1(x)
 
-        return F.log_softmax(x, dim=1)
+        if self.num_classes == 1:
+            return x.view(-1)  # Shape [batch_size], raw logits
+        else:
+            return x
     
     def save(self, path):
         torch.save(self, path/'GCN.pkl')

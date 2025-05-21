@@ -76,7 +76,7 @@ if __name__ == '__main__':
     for tag, complete_data in subsets.items():
         output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
 
-        k = range(2, 42)
+        k = 5
         
         ## load volume data
         data_tps = ["t1", "t2", "t3", "t4", "t5", "t6"]
@@ -140,7 +140,7 @@ if __name__ == '__main__':
         complete_data['cluster'] = labels
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
-        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 15)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
+        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 0)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
 
         DB_score = sklearn.metrics.davies_bouldin_score(filtered_data[data_cols], filtered_data['cluster'])
         print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')

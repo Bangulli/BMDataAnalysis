@@ -27,7 +27,8 @@ if __name__ == '__main__':
 
     train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
                                     used_features=['volume', 'init_volume'],
-                                    test_size=None,
+                                    categorical=[],
+                                    test_size=0.01,
                                     drop_suffix=None,
                                     prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
                                     target_suffix='rano',
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     for tag, complete_data in subsets.items():
         output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
 
-        k = range(2, 42)
+        k = range(2,42)
         
         ## load volume data
         data_tps = ["t1", "t2", "t3", "t4", "t5", "t6"]

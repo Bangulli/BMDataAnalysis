@@ -247,7 +247,7 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
     for i, label in enumerate(unique_labels):
         cluster_df = df[df[label_col] == label]
         mean_traj = cluster_df[data_cols].mean(axis=0)
-        plt.plot(data_cols, mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label}')
+        plt.plot(data_cols, mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label} = {len(cluster_df)}')
 
     plt.ylim(-0.1, 2)
     plt.xlabel("Time")
