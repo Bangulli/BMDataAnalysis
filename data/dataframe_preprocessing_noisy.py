@@ -54,7 +54,7 @@ def load_prepro_noisy_data(path,
     df = pd.read_csv(path, index_col='Lesion ID') # load
     end = time.time()
     print(f"Read {len(df)} samples from csv in {end - start:.6f} seconds, filesize: {os.path.getsize(path)}")
-    if fill is not None: df.fillna(fill, inplace=True) # fill
+    
     if 'init_volume' in used_features: df['init_volume'] = df['t0_volume'].copy(deep=True)
 
     ## this is for uninterpolated data. It generates a target variable based on interpolation
@@ -67,13 +67,19 @@ def load_prepro_noisy_data(path,
             bigger = (None, np.inf)
             exact = None
             for c in dt_cols:
+                if pd.isna(row[c]):
+                    print('time series ended at col',c)
+                    break
                 if row[c] == target_time:
                     exact = c
                     break
+                # smaller case
                 if row[c] - target_time < 0 and row[c] - target_time > smaller[1]:
                     smaller = (c, row[c] - target_time)
-                if target_time - row[c] > 0 and target_time - row[c] < bigger[1]:
+                # bigger case
+                if row[c] - target_time > 0 and row[c] - target_time < bigger[1]:
                     bigger = (c, target_time - row[c])
+
             if exact:
                 tp = exact.split('_')[0]
                 df.loc[i, 'target_volume'] = df.loc[i, f"{tp}_volume"]
@@ -87,6 +93,7 @@ def load_prepro_noisy_data(path,
                 # i couldve just used weighted mean lmao im dumb
                 a = (v_b-v_s)/(bigger[1]-smaller[1]) # slope
                 b = v_s-a*smaller[1] # intercept
+                b = 0 if b<0 else b
                 df.loc[i, 'target_volume'] = b
                 prev_tps = prefixes[:prefixes.index(tp_b)]
                 vols = row[[f"{tp}_volume" for tp in prev_tps]].values.tolist()
@@ -104,8 +111,8 @@ def load_prepro_noisy_data(path,
     drop_rows = []
     drop_row_for_dips_and_spikes =[]
     interpolate_rows = []
-    for id, row in df.iterrows():
-        if target_time: ps = [t for i, t in enumerate(prefixes) if row[f"{t}_timedelta_days"]<target_time and ((i!=0 and row[f"{t}_timedelta_days"]!=0)or(i==0 and row[f"{t}_timedelta_days"]==0))]
+    for id, row in df.iterrows():                                                             # target time plus offset to account for t6 probs
+        if target_time: ps = [t for i, t in enumerate(prefixes) if row[f"{t}_timedelta_days"]<target_time+60 and ((i!=0 and row[f"{t}_timedelta_days"]!=0)or(i==0 and row[f"{t}_timedelta_days"]==0))]
         else: ps = prefixes
         rano_cols = [f"{prfx}_rano" for prfx in ps if prfx != 't0']
         volume_cols = [f"{prfx}_volume" for prfx in ps]
@@ -156,6 +163,8 @@ def load_prepro_noisy_data(path,
     df = df.drop(drop_rows, axis='index')
     df = apply_interpolation_for_target_CR(df, interpolate_rows, interpolate_CR_swing_length, prefixes)
     plot_sankey(df[rano_cols], pl.Path(''))
+
+    if fill is not None: df.fillna(fill, inplace=True) # fill
 
     ## encode rano classes
     if rano_encoding is not None:

@@ -43,8 +43,8 @@ class AddNoise(T.BaseTransform):
         self.p = p
     def __call__(self, data):
         data.x = data.x + self.p * torch.randn_like(data.x)
-        data.edge_weights = data.edge_weights + self.p * torch.randn_like(data.edge_weights)
-        data.edge_attr = data.edge_attr + self.p * torch.randn_like(data.edge_attr)
+        data.edge_weights = data.edge_weights + 0.1 * torch.randn_like(data.edge_weights)
+        data.edge_attr = data.edge_attr + 0.1 * torch.randn_like(data.edge_attr)
         return data
     
 class FeatureDropout(T.BaseTransform):
@@ -164,66 +164,21 @@ if __name__ == '__main__':
          'selection': None,
          'model': 'SimplestGCN', 
          'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'lesion_location'],#, 'radiomics_original'],
-         'transforms': None,
-         'fully_connect': False,
-         'direction': None},
-
-        {'prediction': '1v3', 
-         'selection': None, 
-         'model': 'SimplestGCN', 
-         'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'lesion_location', 'radiomics_original'],
-         'transforms': None,
-         'fully_connect': False,
-         'direction': None},
-
-         {'prediction': '1v3', 
-         'selection': 'LASSO',
-         'model': 'SimplestGCN', 
-         'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'lesion_location', 'radiomics_original'],
-         'transforms': None,
-         'fully_connect': False,
-         'direction': None},
-
-         {'prediction': 'binary', 
-         'selection': None,
-         'model': 'SimplestGCN', 
-         'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'lesion_location'],#, 'radiomics_original'],
-         'transforms': None,
-         'fully_connect': False,
-         'direction': None},
-
-        {'prediction': 'binary', 
-         'selection': None, 
-         'model': 'SimplestGCN', 
-         'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'lesion_location', 'radiomics_original'],
-         'transforms': None,
-         'fully_connect': False,
-         'direction': None},
-
-         {'prediction': 'binary', 
-         'selection': 'LASSO',
-         'model': 'SimplestGCN', 
-         'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'lesion_location', 'radiomics_original'],
-         'transforms': None,
-         'fully_connect': False,
-         'direction': None},
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'deep', 'radiomics_original'],
+         'transforms': T.Compose([AddNoise(0.7), FeatureDropout(0.1)]),
+         'fully_connect': True,
+         'direction': 'past'},
     ]
     
     for i, config in enumerate(options):
-        data = pl.Path(f"/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_uninterpolated/complete_features_all_tps.csv")
+        data = pl.Path(f"/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_uninterpolated/all_features_all_tps_vincent_foundation.csv")
         prediction_type = config['prediction']
         feature_selection = config['selection']
         method = config['model']
         loss_func = config['loss']
         output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/final_graph_ml_noisy')
         used_features = config['feats']
-        categorical =  ['Sex',	'Primary_loc_1', 'lesion_location']
+        categorical =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']
 
         if prediction_type == 'binary':
             rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
@@ -330,8 +285,12 @@ if __name__ == '__main__':
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             if method == 'SimplestGCN':
                 model = SimplestGCN(num_out, dataset_train.get_node_size()).to(device)
+            elif method == 'SimpleGCN':
+                model = SimpleGCN(num_out, dataset_train.get_node_size()).to(device)
             elif method == 'GCN':
                 model = GCN(num_out, dataset_train.get_node_size()).to(device)
+            elif method == 'GAT':
+                model = GAT(num_out, dataset_train.get_node_size()).to(device)
             else:
                 raise RuntimeError(f"Unrecognized method name, cant resolve correct model for {method}")
             optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
@@ -353,7 +312,8 @@ if __name__ == '__main__':
                                             device=device,
                                             validation=0.25,
                                             batch_size=128,
-                                            weighted_loss=False
+                                            weighted_loss=False,
+                                            verbose=True
                                             )
             print(f"Best model achieved loss {best_loss:4f}")
 

@@ -152,7 +152,7 @@ def train(model, dataset, epochs=200, loss_function=F.cross_entropy, optimizer=a
                     best_loss=loss
                     best_model=copy.deepcopy(model)
 
-        if epoch%20==0: ## incremental reporting
+        if epoch%20==0 and epoch!=0 : ## incremental reporting
             plt.plot(train_losses, label='training loss')
             plt.plot(val_losses, label='validation loss')
             plt.ylabel('loss')

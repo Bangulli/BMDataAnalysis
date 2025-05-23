@@ -165,7 +165,7 @@ def normalize_other(df, test, normalize_suffix, prefixes, categorical, test_size
                         continue
                     if col.startswith(f"{tp}_{sfx}"):
                         df[col] = pd.to_numeric(df[col], errors='coerce')
-                        test[col] = pd.to_numeric(test[col], errors='coerce')
+                        if test_size is not None:test[col] = pd.to_numeric(test[col], errors='coerce')
                         std = max(df[col].std(), 1e-6) # avoid div by 0
                         mean = df[col].mean()   
                         print(f'standardizing {col} with mean {mean} and std {std}')
@@ -174,7 +174,7 @@ def normalize_other(df, test, normalize_suffix, prefixes, categorical, test_size
                     elif col in normalize_suffix and col not in processed_cols:
                         processed_cols.append(col)
                         df[col] = pd.to_numeric(df[col], errors='coerce')
-                        test[col] = pd.to_numeric(test[col], errors='coerce')
+                        if test_size is not None:test[col] = pd.to_numeric(test[col], errors='coerce')
                         std = max(df[col].std(), 1e-6) # avoid div by 0
                         mean = df[col].mean()   
                         print(f'standardizing {col} with mean {mean} and std {std}')

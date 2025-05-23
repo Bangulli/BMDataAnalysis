@@ -20,12 +20,12 @@ warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
     method_name = 'stepmix'
-    folder_name = 'final_clusters'
+    folder_name = 'linear_clusters'
     basedir = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502'
     use_derivatives = False
     split_by_vol = False # can be false for no splitting, 'quantile' for quantile splitting, 'meanshift' for using a meanshift to split
 
-    train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
+    train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_linear_clean/gapfilter_rerun.csv'),
                                     used_features=['volume'],
                                     test_size=None,
                                     drop_suffix=None,
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     for tag, complete_data in subsets.items():
         output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
 
-        k = range(2, 42)
+        k = 5
         
         ## load volume data
         data_tps = ["t1", "t2", "t3", "t4", "t5", "t6"]
@@ -141,7 +141,7 @@ if __name__ == '__main__':
         complete_data['cluster'] = labels
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
-        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 15)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
+        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 0)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
 
         DB_score = sklearn.metrics.davies_bouldin_score(filtered_data[data_cols], filtered_data['cluster'])
         print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')

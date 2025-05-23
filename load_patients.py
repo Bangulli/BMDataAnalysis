@@ -21,7 +21,7 @@ import pandas as pd
 from PrettyPrint import *
 import ast
 from visualization import *
-from scripts.compare_segs import *
+from misc_scripts.compare_segs import *
 
 if __name__ == '__main__':
     processed_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED')
@@ -33,10 +33,15 @@ if __name__ == '__main__':
     ## load mets from preparsed store
     value_dicts = []
     all_keys = []
+    lesions_left = 0
     for pat in parsed:
         print('== loading patient:', pat)
         p = load_patient(met_path/pat)
         if not p: continue # load patient returns false if loading fails. it can happen for various reasons and definitely needs some improvements to robustness, starting from the saving function, since it sometimes leaves empty directories, which shouldnt happen
-
+        #p.drop_short_timeseries(300)
+        p.discard_gaps(120, 360, True)
+        p.resample_all_timeseries(360, 6, 'nearest')
+        lesions_left+=len(p.mets)
+    print(f"will have {lesions_left} lesions left over instead of 1393")
 
    

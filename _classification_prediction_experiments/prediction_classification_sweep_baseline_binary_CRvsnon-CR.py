@@ -25,14 +25,14 @@ from scipy.stats import zscore
 if __name__ == '__main__':
     config = {'LogisticRegression': LogisticRegression, 'LGBM': LGBMClassifier, 'SVC':SVC}
     for method, model in config.items():
-        data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv')
+        data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features_anatCL.csv')
         prediction_type = '1v3'
-        feature_selection = None#'LASSO'
+        feature_selection = 'LASSO'
         #method = 'LogisticRegression'
         model = model(class_weight='balanced')
-        output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/baseline_complete')
-        used_features = ['volume']#, 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original']# 'Primary_loc_2', 'Primary_hist_1', 'Primary_hist_2']#]
-        categorical =  []#['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']#, 'Primary_loc_2', 'Primary_hist_1', 'Primary_hist_2']
+        output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/baseline_anatCL')
+        used_features = ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep']# 'Primary_loc_2', 'Primary_hist_1', 'Primary_hist_2']#]
+        categorical =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']#, 'Primary_loc_2', 'Primary_hist_1', 'Primary_hist_2']
         if prediction_type == 'binary':
             rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
         elif prediction_type == '1v3':

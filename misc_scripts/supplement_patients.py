@@ -1,9 +1,9 @@
 import pandas as pd
 import pathlib as pl
 
-main_path = pl.Path("/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_uninterpolated/all_features_all_tps.csv")
+main_path = pl.Path("/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_uninterpolated/all_features_all_tps_vincent_foundation.csv")
 supplement_path = pl.Path("/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/dataset_description_complete.csv")
-output_path = pl.Path("/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_uninterpolated/features_all_tps.csv")
+output_path = pl.Path("/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_uninterpolated/all_features_all_tps_vincent_foundation.csv")
 
 import chardet
 

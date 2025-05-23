@@ -43,7 +43,7 @@ class AddNoise(T.BaseTransform):
         self.p = p
     def __call__(self, data):
         data.x = data.x + self.p * torch.randn_like(data.x)
-        # data.edge_weights = data.edge_weights + 0.01 * torch.randn_like(data.edge_weights)
+        data.edge_weights = data.edge_weights + 0.1 * torch.randn_like(data.edge_weights)
         # data.edge_attr = data.edge_attr + 0.01 * torch.randn_like(data.edge_attr)
         return data
     
@@ -156,7 +156,7 @@ def ldam_loss(input, target, weight):
     loss = LDAMLoss(weight)
     return loss(input, target)
 
-
+# /home/lorenz/anaconda/envs/analysis_env_3.10/bin/python /home/lorenz/BMDataAnalysis/_classification_prediction_experiments/prediction_classification_sweep_baseline_graph_DL.py
 if __name__ == '__main__':
 ########## setup
     options=[
@@ -164,22 +164,44 @@ if __name__ == '__main__':
          'selection': None, 
          'model': 'SimplestGCN', 
          'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics'],
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep'],
          'transforms': T.Compose([AddNoise(0.5), FeatureDropout(0.1)]),
          'fully_connect': True,
          'direction': 'past',
          'loss_balance': True,
-         'noise_level': 0.5},
+         'noise_level': .5},
+
+         {'prediction': '1v3', 
+         'selection': None, 
+         'model': 'SimpleGCN', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep'],
+         'transforms': T.Compose([AddNoise(0.5), FeatureDropout(0.1)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+         {'prediction': '1v3', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep'],
+         'transforms': T.Compose([AddNoise(0.5), FeatureDropout(0.1)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
 
     ]
 
     for i, config in enumerate(options):
-        data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv')
+        data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features_vincent_foundation.csv')
         prediction_type = config['prediction']
         feature_selection = config['selection']
         method = config['model']
         loss_func = config['loss']
-        output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/graph_ml_lvl_4-ftuning')
+        output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/graph_ml_lvl_4-model')
         used_features = config['feats']
         categorical =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']
 
@@ -299,8 +321,12 @@ if __name__ == '__main__':
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             if method == 'SimplestGCN':
                 model = SimplestGCN(num_out, dataset_train.get_node_size()).to(device)
+            elif method == 'SimpleGCN':
+                model = SimpleGCN(num_out, dataset_train.get_node_size()).to(device)
             elif method == 'GCN':
                 model = GCN(num_out, dataset_train.get_node_size()).to(device)
+            elif method == 'GAT':
+                model = GAT(num_out, dataset_train.get_node_size()).to(device)
             else:
                 raise RuntimeError(f"Unrecognized method name, cant resolve correct model for {method}")
             optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)

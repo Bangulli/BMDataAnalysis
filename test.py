@@ -41,53 +41,14 @@ from torch_geometric.utils import to_networkx
 import networkx as nx
 
 
+nonin = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_test_torm/train_exp_filtered_series_nonin.csv')
+inter = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn_filtered/noswings_filtered_series.csv')
 
-if __name__ == '__main__':
-        data_prefixes = ["t0", "t1", "t2", "t3", "t4", "t5", "t6"] # used in the training method to select the features for each step of the sweep
-        volume_cols = [c+'_volume' for c in data_prefixes] # used to normalize the volumes
-        rano_cols = [elem+'_rano' for elem in data_prefixes] # used in the training method to select the current targets
-
-        train_data, test_data = d.load_prepro_data('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv',
-                                            categorical=[],
-                                            fill=0,
-                                            used_features=['volume'],
-                                            test_size=0.2,
-                                            drop_suffix=None,
-                                            prefixes=data_prefixes,
-                                            target_suffix='rano',
-                                            normalize_suffix=None,
-                                            rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3},
-                                            time_required=True,
-                                            interpolate_CR_swing_length=1,
-                                            drop_CR_swing_length=2,
-                                            normalize_volume='std',
-                                            save_processed=None)
-        extra_data = [c for c in train_data.columns if not (c.startswith('ignored') or c.split('_')[0] in data_prefixes)]
-        print("using extra data cols", extra_data)
-        dist = Counter(test_data['t6_rano'])
-
-        ## class weight definition for torch
-        labels = [row['t6_rano'] for i, row in train_data.iterrows()]
-        label_counts = Counter(labels)
-        num_classes = len(label_counts)  # or len(label_counts)
-        counts = torch.tensor([label_counts[i] for i in range(num_classes)], dtype=torch.float)
-        torch_weights = 1.0 / (counts + 1e-6)  # Avoid divide by zero
-        torch_weights = torch_weights / torch_weights.sum()  # Normalize (optional but nice)
+print(len(nonin), len(inter))
 
 
-        # make datasets
-        dataset_train = d.BrainMetsGraphClassification(train_data,
-            used_timepoints = data_prefixes[:4], 
-            ignored_suffixes = ('_timedelta_days', '_rano', 'Lesion ID'), 
-            rano_encoding = {'CR':0, 'PR':1, 'SD':2, 'PD':3},
-            target_name = 't6_rano',
-            extra_features = extra_data,
-            fully_connected=True,
-            direction='future',
-            transforms = None)
-        
-        G = to_networkx(dataset_train[0])
-        plt.figure(figsize=(8, 6))
-        nx.draw(G, with_labels=True, cmap='Set2')
-        plt.savefig("/home/lorenz/BMDataAnalysis/output/graph_visualization_fully_future.png", dpi=300, bbox_inches='tight')
-        plt.close()  # optional: closes the figure to avoid displaying it in Jupyter
+print('without swings filter')
+nonin = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn_filtered/filtered_series.csv')
+inter = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_test_torm/filtered_series_nonin.csv')
+
+print(len(nonin), len(inter), all(nonin['Lesion ID'] == inter['Lesion ID']))

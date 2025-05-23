@@ -7,6 +7,7 @@ from radiomics import featureextractor
 import logging
 import sys
 from pathlib import Path
+from scipy.stats import zscore
 import torch
 import torch.nn as nn
 import monai.transforms as mt
@@ -160,7 +161,7 @@ class Metastasis():
         if self.t1_path is not None and self.sitk is not None and sitk.GetArrayFromImage(self.sitk).any():
             extractor = featureextractor.RadiomicsFeatureExtractor()
             extractor.enableAllFeatures()
-            extractor.enableAllImageTypes()
+            #extractor.enableAllImageTypes()
             #extractor.settings['binwidth'] = 100
             #print(type(self.sitk), self.t1_path)
             arr = sitk.GetArrayFromImage(self.sitk)
@@ -185,55 +186,95 @@ class Metastasis():
         if lbl: return lbl[0]
         else: return None
 
-    def get_t1_deep_vector(self, model_name='efficientnet_b0', device='cuda' if torch.cuda.is_available() else 'cpu'):
-        """
-        Loads a NIfTI image and returns a feature vector using an EfficientNet backbone.
-
-        Args:
+    # def get_t1_deep_vector(self, model_name='efficientnet_b0', device='cuda' if torch.cuda.is_available() else 'cpu'):
+    #     """
+    #     Loads a NIfTI image and returns a feature vector using an EfficientNet backbone.
+    #     courtesy of chatgpt
+    #     Args:
             
-            model_name (str): Name of EfficientNet variant ('efficientnet_b0' ... 'efficientnet_b7').
-            device (str): 'cuda' or 'cpu'
+    #         model_name (str): Name of EfficientNet variant ('efficientnet_b0' ... 'efficientnet_b7').
+    #         device (str): 'cuda' or 'cpu'
 
-        Returns:
-            list: Feature vector as a list of floats.
+    #     Returns:
+    #         list: Feature vector as a list of floats.
+    #     """
+    #     # Load NIfTI image
+    #     nii = nib.load(self.t1_path)
+    #     volume = nii.get_fdata()
+
+    #     # Collapse to a 2D image (e.g., middle axial slice)
+    #     mid_slice = volume.shape[2] // 2
+    #     image = volume[:, :, mid_slice]
+    #     image = np.clip(image, np.percentile(image, 1), np.percentile(image, 99))  # Intensity normalization
+    #     image = (image - image.min()) / (image.max() - image.min())  # [0, 1]
+    #     image = (image * 255).astype(np.uint8)
+
+    #     # Convert to 3-channel RGB
+    #     image_3ch = np.stack([image] * 3, axis=-1)
+
+    #     # Define preprocessing transform
+    #     preprocess = transforms.Compose([
+    #         transforms.ToTensor(),
+    #         transforms.Resize((224, 224)),  # EfficientNet default
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406],  # ImageNet stats
+    #                             std=[0.229, 0.224, 0.225])
+    #     ])
+
+    #     # Apply transform
+    #     input_tensor = preprocess(image_3ch).unsqueeze(0).to(device)
+
+    #     # Load EfficientNet backbone
+    #     model = getattr(models, model_name)(pretrained=True)
+    #     model.classifier = nn.Identity()  # Remove classification head
+    #     model.eval()
+    #     model.to(device)
+
+    #     # Extract features
+    #     with torch.no_grad():
+    #         features = model(input_tensor)
+
+    #     return features.squeeze().cpu().numpy().tolist()
+    def get_t1_deep_vector(self, deep_extractor, com, size=64):
+        t1 = sitk.ReadImage(self.t1_path)
+        t1 = sitk.GetArrayFromImage(t1)
+        # idk what normalization technique is used so i will just standardize
+        # from dataset fingerprint
+        # mean = 415.03070068359375
+        # std = 392.2879333496094
+        # min_i = 0.0
+        # max_i =  3801.0
+        # t1 = (t1-mean)/std # standardize image using dataset_fingerprint.json values
+        #t1 = t1/max_i # normalize image to range 0-1 (omitting offset with min intensity cause its 0 anyway)
+        t1 = (t1 - np.min(t1)) / (np.max(t1) - np.min(t1)) # from vincents code
+        lower, upper = self._compute_patch_boundaries_with_edge_safeguards(com, size, t1.shape)
+        t1_patch = t1[lower[0]:upper[0], lower[1]:upper[1], lower[2]:upper[2]]
+        sitk.WriteImage(sitk.GetImageFromArray(t1_patch), '/home/lorenz/BMDataAnalysis/logs/patch.nii.gz')
+        t1_patch = torch.from_numpy(t1_patch).float().unsqueeze(0).unsqueeze(0).to(deep_extractor.device)
+        vector = deep_extractor.extract_features(t1_patch).detach().squeeze().cpu().numpy()
+        return vector
+
+    def _compute_patch_boundaries_with_edge_safeguards(self, patch, size, shape):
         """
-        # Load NIfTI image
-        nii = nib.load(self.t1_path)
-        volume = nii.get_fdata()
-
-        # Collapse to a 2D image (e.g., middle axial slice)
-        mid_slice = volume.shape[2] // 2
-        image = volume[:, :, mid_slice]
-        image = np.clip(image, np.percentile(image, 1), np.percentile(image, 99))  # Intensity normalization
-        image = (image - image.min()) / (image.max() - image.min())  # [0, 1]
-        image = (image * 255).astype(np.uint8)
-
-        # Convert to 3-channel RGB
-        image_3ch = np.stack([image] * 3, axis=-1)
-
-        # Define preprocessing transform
-        preprocess = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize((224, 224)),  # EfficientNet default
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],  # ImageNet stats
-                                std=[0.229, 0.224, 0.225])
-        ])
-
-        # Apply transform
-        input_tensor = preprocess(image_3ch).unsqueeze(0).to(device)
-
-        # Load EfficientNet backbone
-        model = getattr(models, model_name)(pretrained=True)
-        model.classifier = nn.Identity()  # Remove classification head
-        model.eval()
-        model.to(device)
-
-        # Extract features
-        with torch.no_grad():
-            features = model(input_tensor)
-
-        return features.squeeze().cpu().numpy().tolist()
-        
+        compute the patch boundaries with boundary safeguards. 
+        in edge cases will fit the patch to image borders, no padding or mirroring
+        """
+        r = int(size/2)
+        lower = []
+        upper = []
+        for dim, bound in zip(patch, shape):
+            dmin, dmax = dim-r, dim+r
+            if dmin<0:
+                offset = abs(dmin)
+                dmin += offset
+                dmax += offset
+            if dmax>bound:
+                offset = bound-dmax
+                dmin += offset
+                dmax += offset
+            lower.append(dmin)
+            upper.append(dmax)
+        return lower, upper
+            
 
 
 class InterpolatedMetastasis(Metastasis):

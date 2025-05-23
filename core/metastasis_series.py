@@ -185,6 +185,18 @@ class MetastasisTimeSeries():
                     print(f"Time series is not causal!")
                     if raise_on_invalid: raise RuntimeError(f"Time series is not causal!")
 
+    def check_interval(self, max_gap=120, max_period=360):
+        prev=self.keys[0]
+        t0=self.dates[self.keys[0]]
+        for k in self.keys[1:]:
+            if (self.dates[k]-self.dates[prev]).days>max_gap:
+                return False
+            else:
+                prev=k
+            if (self.dates[k]-t0).days>max_period:
+                return True
+        return False
+
                 
     def save(self, path:pl.Path, use_symlinks=True):
         """
@@ -412,6 +424,7 @@ class MetastasisTimeSeries():
         """
         value_dict = {}
         for i, d in enumerate(self.keys):
+            #print(f"t{i} at date {d} has volume {self.time_series[d].lesion_volume}")
             value_dict[f"t{i}_volume"] = self.time_series[d].lesion_volume
         return value_dict
     
@@ -426,11 +439,14 @@ class MetastasisTimeSeries():
         t0_met = self.time_series[self.keys[0]]
         return {'lesion_location': t0_met.get_location_in_brain()}
     
-    def get_deep_vectors(self):
+    def get_deep_vectors(self, deep_extractor):
         deep_dict = {}
+        com = None
         for i, d in enumerate(self.keys):
+            if i==0:
+                com = np.asarray(center_of_mass(self.time_series[d].image)).round().astype(int)
             print(f'=== working on t{i}')
-            vector = self.time_series[d].get_t1_deep_vector()
+            vector = self.time_series[d].get_t1_deep_vector(deep_extractor, com)
             for j, v in enumerate(vector):
                 deep_dict[f"t{i}_deep_{j}"] = v
         return deep_dict

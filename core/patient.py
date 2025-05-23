@@ -108,6 +108,10 @@ class Patient():
         self.mets = {i:met for i,met in self.mets.items() if met.id in matched}
         print(f"discarded {initial-len(self.mets)} metastases series, kept metastses: {[met for met in list(self.mets.keys())]}")
     
+    def discard_gaps(self, max_gap=120, max_period=360, verbose=False):
+        if verbose: [print(f"Dropping {met.id} for having a gap of more than {max_gap} days in the period of {max_period}") for i, met in self.mets.items() if met.check_interval(max_gap, max_period)]
+        self.mets = {i:met for i,met in self.mets.items() if met.check_interval(max_gap, max_period)}
+    
     def tag_unmatched(self, matched:list):
         """
         In case the matching to RT is used, tag metastases that are not matched
@@ -126,7 +130,7 @@ class Patient():
             met.validate(raise_on_invalid)
 
 ####### GETTERS    
-    def get_features(self, features='all', get_keys=True):
+    def get_features(self, features='all', get_keys=True, deep_extractor=None):
         """
         Returns a list of dictionaries to be written with the csv library for example
         each dict is a time series
@@ -136,7 +140,7 @@ class Patient():
         dict_list = []
         keys = None
         for i, ts in self.mets.items():
-                print(f'== working on Metastasis {i}')
+                print(f'== working on Metastasis {ts.id}')
             #try:
                 if ts is not None:
                     
@@ -163,7 +167,7 @@ class Patient():
                         if feature in ['all', 'radiomics']:
                             cur_dict = {**cur_dict, **ts.get_radiomics()}
 
-                        if feature in ['all', 'patient_meta']: # age sex weight height
+                        if feature in ['all', 'patient_meta']: 
                             cur_dict = {**cur_dict, 'Brain Volume': self.brain_volume}
 
                         if feature in ['all', 'total_load']: 
@@ -172,8 +176,8 @@ class Patient():
                         if feature in ['all', 'lesion_meta']: # location in brain, primary, etc
                             cur_dict = {**cur_dict, **ts.get_location_in_brain()}
 
-                        if feature in ['all', 'deep']: # encoded vector from vincents foundation model
-                            cur_dict = {**cur_dict, **ts.get_deep_vectors()}
+                        if feature in ['all', 'deep'] and deep_extractor is not None: # encoded vector from vincents foundation model
+                            cur_dict = {**cur_dict, **ts.get_deep_vectors(deep_extractor)}
                     
                     dict_list.append(cur_dict)
 
