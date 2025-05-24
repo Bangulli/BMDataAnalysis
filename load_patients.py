@@ -33,15 +33,48 @@ if __name__ == '__main__':
     ## load mets from preparsed store
     value_dicts = []
     all_keys = []
-    lesions_left = 0
-    for pat in parsed:
+
+    for pat in ['sub-PAT0049']:#, 'sub-PAT0049']:#, 'sub-PAT0020', 'sub-PAT0049']:
         print('== loading patient:', pat)
         p = load_patient(met_path/pat)
         if not p: continue # load patient returns false if loading fails. it can happen for various reasons and definitely needs some improvements to robustness, starting from the saving function, since it sometimes leaves empty directories, which shouldnt happen
         #p.drop_short_timeseries(300)
-        p.discard_gaps(120, 360, True)
+        p.discard_gaps(120, 360, False)
+        p.discard_swings(420, True)
         p.resample_all_timeseries(360, 6, 'nearest')
-        lesions_left+=len(p.mets)
-    print(f"will have {lesions_left} lesions left over instead of 1393")
+        post_l, keys = p.get_features(['volume', 'rano', 'radiomics'], True, None)
+        if keys: all_keys += [k for k in keys if k not in all_keys]
+
+        ## write data to csv
+        with open('/home/lorenz/BMDataAnalysis/without_swings', 'w') as file:
+            header = all_keys
+            writer = csv.DictWriter(file, fieldnames=header)
+            writer.writeheader()
+            for d in post_l:
+                writer.writerow(d)
+            print('== done')
+
+        all_keys = []
+        print('== loading patient:', pat)
+        p = load_patient(met_path/pat)
+        if not p: continue # load patient returns false if loading fails. it can happen for various reasons and definitely needs some improvements to robustness, starting from the saving function, since it sometimes leaves empty directories, which shouldnt happen
+        #p.drop_short_timeseries(300)
+        p.discard_gaps(120, 360, False)
+        p.resample_all_timeseries(360, 6, 'nearest')
+        pre_l, keys = p.get_features(['volume', 'rano', 'radiomics'], True, None)
+        if keys: all_keys += [k for k in keys if k not in all_keys]
+
+        ## write data to csv
+        with open('/home/lorenz/BMDataAnalysis/with_swings', 'w') as file:
+            header = all_keys
+            writer = csv.DictWriter(file, fieldnames=header)
+            writer.writeheader()
+            for d in pre_l:
+                writer.writerow(d)
+            print('== done')
+
+
+
+
 
    

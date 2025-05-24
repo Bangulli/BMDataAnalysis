@@ -138,6 +138,7 @@ def load_series(path:pl.Path):
         tp_date = datetime.strptime(elem.split(' - ')[-1], "%Y%m%d%H%M%S")
         tp_date_str = 'ses-'+elem.split(' - ')[-1]
         new_series.append(tp, tp_date, tp_date_str)
+    
     return new_series
 
 def cluster_to_series(volumes, delta_t):
@@ -170,6 +171,100 @@ class MetastasisTimeSeries():
     def set_total_lesion_load_at_tp(self, count, load, tp):
         assert tp in self.keys, f"timepoint must exist in this time series, didnt find {tp}"
         self.time_series[tp].set_total_lesion_load(count, load)
+
+    def check_has_CR_swings(self, cutoff=420, verbose=False):#
+        """
+        This function checks whethter the data has any long CR swings and returns True if so. Used to drop time series that are affected
+        If not will continue running and interpolate any short CR swings by overwriting the volume of the timepoint
+        
+        Works by encoding the volume into a compressed from: [[non-CR, 2], [CR, 1], [non-CR, 1], [CR, 2]] for time series [nCR, nCR, CR, nCR, CR, CR]
+        Then runs over compressed sections and handles them according to their length and state
+        """
+        volumes = self.__list__() # get list of volumes then use compression logic from loader
+        if verbose: print(volumes)
+        compressed = [] # generate an encoding of swing state and length e.g. [[non-CR, 2], [CR, 1], [non-CR, 1], [CR, 2]] for time series [nCR, nCR, CR, nCR, CR, CR]
+        # this is used to easily identify if the lesion is a swing or a true CR
+        for i, v in enumerate(volumes):
+            j = 'non-CR' if v != 0 else 'CR'
+            if i == 0: compressed.append([1, j])
+            else:
+                if compressed[len(compressed)-1][1] == j: # check if current is same value as prev
+                    compressed[len(compressed)-1][0] += 1 # add another value to swing state compression
+                else: # add new swing state if deviates from previous
+                    compressed.append([1, j])
+        if verbose: print(compressed)
+        # iterate over compression to tag single swings and tag the lesion as discard if it has a double swing
+        if compressed[0][1] == 'non-CR' and len(compressed)==2: #ideal case one state change across lifetime
+            if verbose: print('This is an ideal case')
+            for i in range(len(self)):
+                self.time_series[self.keys[i]].is_swing = False
+            return
+        elif compressed[0][1] == 'CR' and len(compressed)!=1:
+            raise RuntimeError('wtf this should never happen: swing encoding got a CR onset, meaning the lesion starts with CR at t0, that shouldnt be possible')
+        else:
+            idx = 0
+            for i, swing in enumerate(compressed): # check swings except last one
+                state = swing[1]
+                length = swing[0]
+                ## ignore final swing
+                ## final swing is not encoded as a swing
+                if i == len(compressed)-1:
+                    if verbose: print('Tagging final swing period of', length)
+                    for j in range(idx, idx+length):
+                        #if verbose: print(vars(self.time_series[self.keys[i]]))
+                        self.time_series[self.keys[j]].is_swing = False
+                        #if verbose: print(vars(self.time_series[self.keys[i]]))
+                    continue
+                ## basically ignore non-CR swings we only care about CR swings
+                ## non CR is not encoded as a swing
+                if state == 'non-CR':
+                    if verbose: print('Tagging non-CR swing period of', length)
+                    for j in range(idx, idx+length):
+                        self.time_series[self.keys[j]].is_swing = False
+                    idx+=length
+                ## the interesting part
+                ## here swings to CR are tagged
+                ## this cannot happen in the final swing in the list because that is caught by the first if
+                ## this way the final CR is not encoded as a swing
+                else:
+                    if verbose: print('Tagging CR swing period of', length)
+                    for j in range(idx, idx+length):
+                        self.time_series[self.keys[j]].is_swing = True
+                    idx+=length
+        
+        ## check if long swings exist, if so exit method early 
+        is_discard = self._swing_discard(cutoff, verbose)
+        if is_discard: return is_discard
+
+        #[print(f"t{i} at {k} has volume: {met}, {type(met)}") for i, (k, met) in enumerate(self.time_series.items())]
+
+        ## handle single swings
+        for i, k in enumerate(self.time_series):
+            if i == 0: # skip first iter
+                continue
+            if self.time_series[k].is_swing: # interpolate if is a swing. swings only affect radiomics, rano and volume. If we only set the volume attribute of the affected metastasis obj, it will take care of volume and rano, as rano is coputed only at extraction time
+                met1, met2 = self.keys[i-1], self.keys[i+1]
+                dt1 = (self.dates[met1]-self.dates[k]).days
+                dt2 = (self.dates[met2]-self.dates[k]).days
+                v = self._linear_interpolation(met1, dt1, met2, dt2)
+                if verbose: print(f"Writing interpolated volume {v} on tp {k} for {self.id}")
+                self.time_series[k].lesion_volume = v
+        if verbose: print(self.__list__())
+        return False
+
+    def _swing_discard(self, cutoff=420, verbose=False):
+        """
+        Returns False if there is no two tp swing in the series
+        Returns True if there is, meaning the lesion needs to be discarded
+        """
+        swings = ''
+        for i, k in enumerate(self.keys):
+            if not (self.dates[k]-self.dates[self.keys[0]]).days < cutoff: # if longer than relevant period stop
+                break
+            swings += '1' if self.time_series[k].is_swing else '0'
+        if verbose: print('got swingstring:', swings, '\n   -- is there double swing? ->', '11' in swings)
+        if verbose and '11' in swings: print('Dropping', self.id)
+        return '11' in swings # a two tp long swing should appear as 11 in the binary string so if that happens discard lesion
         
     def validate(self, raise_on_invalid=True):
         prev = None
@@ -185,19 +280,26 @@ class MetastasisTimeSeries():
                     print(f"Time series is not causal!")
                     if raise_on_invalid: raise RuntimeError(f"Time series is not causal!")
 
-    def check_interval(self, max_gap=120, max_period=360):
+    def check_has_no_large_intervals(self, max_gap=120, max_period=360, verbose=False):
+        """
+        Check if the time series has large gaps. if so return false
+        else return true if the lesion is ok
+        """
+        if verbose: print('-- check interval has been invoked on', self.id)
         prev=self.keys[0]
         t0=self.dates[self.keys[0]]
         for k in self.keys[1:]:
             if (self.dates[k]-self.dates[prev]).days>max_gap:
+                if verbose: print(f"gap between {prev} and {k} is {(self.dates[k]-self.dates[prev]).days}")
                 return False
             else:
                 prev=k
             if (self.dates[k]-t0).days>max_period:
+                if verbose: print(f"safely reached max period")
                 return True
-        return False
-
-                
+        if verbose: print('reached the end of the loop without triggering early stop')
+        return True
+            
     def save(self, path:pl.Path, use_symlinks=True):
         """
         Saves the metastasis series to a target directory
@@ -275,7 +377,7 @@ class MetastasisTimeSeries():
                 if i == 0:
                     continue
                 keys_dts = self._find_closest_bilateral(tps[tp])
-                interpolated_volume = self._liner_interpolation(*keys_dts)
+                interpolated_volume = self._linear_interpolation(*keys_dts)
                 new_series.append(InterpolatedMetastasis(interpolated_volume), tps[tp], tp)
             return new_series
         
@@ -385,15 +487,17 @@ class MetastasisTimeSeries():
         """
         computes a dictionary of radiomics features for each timepoint 
         """
+        print('=== Getting Radiomics')
         radio_dict = {}
         ref_dict = None
+        value_keys = None
         for i, d in enumerate(self.keys):
             print(f'=== working on t{i}')
             radiomics = self.time_series[d].get_t1_radiomics()
-            if ref_dict is None: ref_dict = copy.deepcopy(radiomics)
-            if radiomics:
+            if ref_dict is None: ref_dict = copy.deepcopy(radiomics) # gets all the feature keys to write in case of missing data
+            if value_keys is None: value_keys = [k for k in radiomics.keys() if not k.startswith('diagnostics')]
+            if radiomics: # if extraction succeeds discard diagnostics and write to radiomics dict
                 prefix = f't{i}_radiomics_'
-                value_keys = [k for k in radiomics.keys() if not k.startswith('diagnostics')]
                 for v_k in value_keys:
                     value = radiomics[v_k]
                     value = value.item() if isinstance(value, np.ndarray) and value.shape == () else value
@@ -405,7 +509,6 @@ class MetastasisTimeSeries():
                         radio_dict[prefix+v_k] = value
             else:
                 prefix = f't{i}_radiomics_'
-                value_keys = [k for k in ref_dict.keys() if not k.startswith('diagnostics')]
                 for v_k in value_keys:
                     value = ref_dict[v_k]
                     value = value.item() if isinstance(value, np.ndarray) and value.shape == () else value
@@ -415,8 +518,99 @@ class MetastasisTimeSeries():
 
                     else:
                         radio_dict[prefix+v_k] = ''
+        
+        # postprocess radiomics dict by interpolating swing tp values
+        for i, k in enumerate(self.keys):
+            if i==0 or i==len(self.keys)-1: continue # skip first and last iter
+            if hasattr(self.time_series[k], 'is_swing'): # check if the ts has been processed with the swing checker
+                if self.time_series[k].is_swing:
+                    value_keys = [k for k in ref_dict.keys() if not k.startswith('diagnostics')]
+                    prev_prfx = f"t{i-1}_radiomics_"
+                    curr_prfx = f"t{i}_radiomics_"
+                    dt1 = (self.dates[self.keys[i-1]]-self.dates[k]).days
+                    for v_k in value_keys:
+                        v1 = radio_dict[prev_prfx+v_k]
+                        ## sometimes due to interpolation the same lesion can appear twice
+                        ## when this happens with an empty lesion we have a problem because the interpolation doesnt work
+                        ## so this quick and dirty workaround aims to fix that. It would be better to do that before interpolation but theproblem is that messes up the whole workflow
+                        ## i know this is horrbile but i dont have time so i gotta leave this mess in
+                        try:
+                            post_prfx = f"t{i+1}_radiomics_"
+                            dt2 = (self.dates[self.keys[i+1]]-self.dates[k]).days
+                            v2 = radio_dict[post_prfx+v_k]
+                            radio_dict[curr_prfx+v_k] = self._linear_interpolation_for_values(v1, dt1, v2, dt2)
+                        except:
+                            post_prfx = f"t{i+1}_radiomics_"
+                            dt2 = (self.dates[self.keys[i+1]]-self.dates[k]).days
+                            v2 = 0
+                            radio_dict[curr_prfx+v_k] = self._linear_interpolation_for_values(v1, dt1, v2, dt2)
+
         return radio_dict
 
+    def get_border_radiomics(self):
+        """
+        computes a dictionary of radiomics features for each timepoint 
+        """
+        print('=== Getting Border Radiomics')
+        radio_dict = {}
+        ref_dict = None
+        value_keys = None
+        for i, d in enumerate(self.keys):
+            print(f'=== working on t{i}')
+            radiomics = self.time_series[d].get_t1_border_radiomics()
+            if ref_dict is None: ref_dict = copy.deepcopy(radiomics) # gets all the feature keys to write in case of missing data
+            if value_keys is None: value_keys = [k for k in radiomics.keys() if not k.startswith('diagnostics')]
+            if radiomics: # if extraction succeeds discard diagnostics and write to radiomics dict
+                prefix = f't{i}_border_radiomics_'
+                for v_k in value_keys:
+                    value = radiomics[v_k]
+                    value = value.item() if isinstance(value, np.ndarray) and value.shape == () else value
+                    if isinstance(value, Iterable):
+                        for i, v in enumerate(value):
+                            radio_dict[prefix+v_k+f'_{i}'] = v
+
+                    else:
+                        radio_dict[prefix+v_k] = value
+            else:
+                prefix = f't{i}_border_radiomics_'
+                for v_k in value_keys:
+                    value = ref_dict[v_k]
+                    value = value.item() if isinstance(value, np.ndarray) and value.shape == () else value
+                    if isinstance(value, Iterable):
+                        for i, v in enumerate(value):
+                            radio_dict[prefix+v_k+f'_{i}'] = ''
+
+                    else:
+                        radio_dict[prefix+v_k] = ''
+        
+        # postprocess radiomics dict by interpolating swing tp values
+        for i, k in enumerate(self.keys):
+            if i==0 or i==len(self.keys)-1: continue # skip first and last iter
+            if hasattr(self.time_series[k], 'is_swing'): # check if the ts has been processed with the swing checker
+                if self.time_series[k].is_swing:
+                    value_keys = [k for k in ref_dict.keys() if not k.startswith('diagnostics')]
+                    prev_prfx = f"t{i-1}_border_radiomics_"
+                    curr_prfx = f"t{i}_border_radiomics_"
+                    dt1 = (self.dates[self.keys[i-1]]-self.dates[k]).days
+                    for v_k in value_keys:
+                        v1 = radio_dict[prev_prfx+v_k]
+                        ## sometimes due to interpolation the same lesion can appear twice
+                        ## when this happens with an empty lesion we have a problem because the interpolation doesnt work
+                        ## so this quick and dirty workaround aims to fix that. It would be better to do that before interpolation but theproblem is that messes up the whole workflow
+                        ## i know this is horrbile but i dont have time so i gotta leave this mess in
+                        try:
+                            post_prfx = f"t{i+1}_border_radiomics_"
+                            dt2 = (self.dates[self.keys[i+1]]-self.dates[k]).days
+                            v2 = radio_dict[post_prfx+v_k]
+                            radio_dict[curr_prfx+v_k] = self._linear_interpolation_for_values(v1, dt1, v2, dt2)
+                        except:
+                            post_prfx = f"t{i+1}_border_radiomics_"
+                            dt2 = (self.dates[self.keys[i+1]]-self.dates[k]).days
+                            v2 = 0
+                            radio_dict[curr_prfx+v_k] = self._linear_interpolation_for_values(v1, dt1, v2, dt2)
+
+        return radio_dict
+    
     def get_volume(self):
         """
         wraps the python dict cast
@@ -440,6 +634,7 @@ class MetastasisTimeSeries():
         return {'lesion_location': t0_met.get_location_in_brain()}
     
     def get_deep_vectors(self, deep_extractor):
+        print('=== Getting Deep Features')
         deep_dict = {}
         com = None
         for i, d in enumerate(self.keys):
@@ -464,6 +659,24 @@ class MetastasisTimeSeries():
         Returns a list of lesion volumes
         """
         return [self.time_series[met].lesion_volume for met in self.keys]
+    
+    def to_list(self, cutoff):
+        """
+        generates a list of volumes, but only up until a certain timepoint
+        """
+        vols = []
+        t0 = self.dates[self.keys[0]]
+        for i in len(self):
+            m, d, k = self[i]
+            if i == 0:
+                vols.append(m.lesion_volume)
+                continue
+            if (d-t0).days < cutoff:
+                vols.append(m.lesion_volume)
+            else:
+                break
+        return vols
+
 
 ######## Visualization
     def plot_trajectory(self, path, xlabel='Delta T [days]', ylabel='Volume [mm³]', x_tick_offset=0, title='Metastis Volume Trajectory'):
@@ -521,7 +734,7 @@ class MetastasisTimeSeries():
         plt.clf()
 
 ######## Private Utils
-    def _liner_interpolation(self, met1, dt1, met2, dt2):
+    def _linear_interpolation(self, met1, dt1, met2, dt2):
         """
         Interpolates a volume by approximating a line between two time points
         Uses 2D space, takes delta_t as x and volume as y
@@ -530,6 +743,13 @@ class MetastasisTimeSeries():
         met2 = self.time_series[met2]
         v1 = met1.lesion_volume
         v2 = met2.lesion_volume
+        return self._linear_interpolation_for_values(v1, dt1, v2, dt2)
+    
+    def _linear_interpolation_for_values(self, v1, dt1, v2, dt2):
+        """
+        Interpolates a volume by approximating a line between two time points
+        Uses 2D space, takes delta_t as x and volume as y
+        """
         # just a simple line formula where a point in 2D space is defined as p(x,y) where x = delta_t and y = volume
         a = (v2-v1)/(dt2-dt1) # slope
         b = v1-a*dt1 # intercept

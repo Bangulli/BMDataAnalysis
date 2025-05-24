@@ -27,8 +27,8 @@ import deep_features
 if __name__ == '__main__':
     processed_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PROCESSED')
     met_path = pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502') # location of preparsed metastases
-    folder_name = 'csv_linear_clean'
-    file_name = 'filtered_series_nonin.csv'
+    folder_name = 'final_extraction'
+    file_name = 'none.csv'
     extractor = deep_features.get_vincent_encoder()
     os.makedirs(met_path/folder_name, exist_ok=True)
     parsed = [pat for pat in os.listdir(met_path) if pat.startswith('sub-PAT')]
@@ -41,19 +41,19 @@ if __name__ == '__main__':
         p = load_patient(met_path/pat)
         if not p: continue # load patient returns false if loading fails. it can happen for various reasons and definitely needs some improvements to robustness, starting from the saving function, since it sometimes leaves empty directories, which shouldnt happen
         print('== resampling patient:', pat)
-        p.discard_gaps(120, 360, True)
-        #p.drop_short_timeseries(330)
-        p.resample_all_timeseries(360, 6, 'linear')
-        # p.drop_short_timeseries()
+        p.discard_gaps(120, 360, False)
+        p.discard_swings(420, False)
+        #p.resample_all_timeseries(360, 6, 'nearest')
+        p.drop_short_timeseries()
         print('== extracting features for patient:', pat)
-        v, keys = p.get_features(['volume', 'rano'], deep_extractor=extractor)
+        v, keys = p.get_features(['all'], deep_extractor=extractor)
         if keys: all_keys += [k for k in keys if k not in all_keys] # this is going to cost a lot of time but is necessary for noninterpolated extraction, because the feature dicts will be of variable length so the csv dict writer needs to get all feature keys to make sure it works
         value_dicts += v
 
     
     ## write data to csv
     with open(met_path/folder_name/file_name, 'w') as file:
-        print(f'== extracted {len(keys)} features for {len(value_dicts)} metastases, writing to file...')
+        print(f'== extracted {len(all_keys)} features for {len(value_dicts)} metastases, writing to file...')
         header = all_keys
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
@@ -64,6 +64,6 @@ if __name__ == '__main__':
     df = pd.read_csv(met_path/folder_name/file_name)
     ranos = [k for k in df.columns if k.endswith('_rano') and not k.startswith('t0')]
     print(ranos)
-    plot_sankey(df[ranos], met_path/folder_name, tag='all_')
+    plot_sankey(df[ranos], met_path/folder_name, tag='none_')
 
    

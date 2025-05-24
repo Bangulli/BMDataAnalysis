@@ -177,6 +177,32 @@ class Metastasis():
             return t1_radiomics
         else: return False
 
+    def get_t1_border_radiomics(self):
+        if self.t1_path is not None and self.sitk is not None and sitk.GetArrayFromImage(self.sitk).any():
+            extractor = featureextractor.RadiomicsFeatureExtractor()
+            extractor.enableAllFeatures()
+            #extractor.enableAllImageTypes()
+            #extractor.settings['binwidth'] = 100
+            #print(type(self.sitk), self.t1_path)
+            arr = sitk.GetArrayFromImage(self.sitk)
+            if arr.max == np.iinfo(arr.dtype).max: arr[arr==arr.max]=0
+            arr = sitk.GetImageFromArray(arr)
+            arr.CopyInformation(self.sitk)
+            self.sitk = arr
+            mask = self.sitk if self.sitk is not None else self.binary_source
+            dil = sitk.BinaryDilate(mask, 
+                            kernelRadius=(3,3,3),
+                            kernelType=sitk.sitkBall,  # or Cross, Box, Annulus
+                            foregroundValue=1)
+            er = sitk.BinaryErode(mask, 
+                            kernelRadius=(3,3,3),
+                            kernelType=sitk.sitkBall,  # or Cross, Box, Annulus
+                            foregroundValue=1)
+            border = sitk.And(dil, sitk.Not(er))
+            t1_radiomics = extractor.execute(str(self.t1_path), border)
+            return t1_radiomics
+        else: return False
+
     def set_total_lesion_load(self, count, load):
         self.count=count
         self.load=load

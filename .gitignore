@@ -112,3 +112,9 @@ output
 logs
 pkgs_clean.txt
 pkgs.txt
+rano_flow_sankey_plot.png
+deep_features/nnUNET/dataset_fingerprint.json
+deep_features/nnUNET/dataset.json
+deep_features/nnUNET/nnUNetPlans.json
+rano_flow_sankey_plot.png
+rano_flow_sankey_plot.png

@@ -56,7 +56,7 @@ if __name__ == '__main__':
         output = output_path/f'classification/{prediction_type}/featuretypes={used_features}_selection={feature_selection}/{method}'
         os.makedirs(output, exist_ok=True)
 
-        data, _ = d.load_prepro_noisy_data(data,
+        data, _ = d.load_prepro_data(pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_sanitycheck/nn.csv'),
                                             categorical=[],
                                             fill=0,
                                             used_features=used_features,
@@ -70,8 +70,24 @@ if __name__ == '__main__':
                                             interpolate_CR_swing_length=1,
                                             drop_CR_swing_length=2,
                                             normalize_volume=None,
-                                            save_processed=None)#pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_linear_clean/noswing_rerun.csv'))
+                                            save_processed=None)#pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_sanitycheck/noswing_linear.csv'))#pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_linear_clean/noswing_rerun.csv'))
         
-  
-        plot_sankey(data[rano_cols], pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_linear_clean'), tag='noswing_')
+        # data_prefixes = [f"t{i}" for i in range(38)]
+        # data, _ = d.load_prepro_noisy_data(pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_sanitycheck/noninter.csv'),
+        #                                     categorical=[],
+        #                                     fill=0,
+        #                                     used_features=used_features,
+        #                                     test_size=None,
+        #                                     drop_suffix=eliminator,
+        #                                     prefixes=data_prefixes,
+        #                                     target_suffix='rano',
+        #                                     normalize_suffix=[f for f in used_features if f!='volume' and f!='total_lesion_count'],
+        #                                     rano_encoding={'CR':'CR', 'PR':'PR', 'SD':'SD', 'PD':'PD'},
+        #                                     time_required=False,
+        #                                     interpolate_CR_swing_length=1,
+        #                                     drop_CR_swing_length=2,
+        #                                     normalize_volume=None,
+        #                                     target_time=360,
+        #                                     save_processed=pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_sanitycheck/noswing_noninter.csv'))
+        # #plot_sankey(data[rano_cols], pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_linear_clean'), tag='noswing_')
         break

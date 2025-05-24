@@ -88,6 +88,10 @@ class Patient():
         for i, series in self.mets.items():
             series.save(path/self.id)
 
+    def discard_swings(self, relevant_period=420, verbose=False):
+        self.mets = {i:met for i, met in self.mets.items() if not met.check_has_CR_swings(relevant_period, verbose)}
+        if verbose: [print('I still have', met.id) for k, met in self.mets.items()]
+
     def resample_all_timeseries(self, timeframe_days:int=360, timepoints: int=6, method:str='linear'):
         """
         applies the resampling to all metastases in the patient
@@ -109,8 +113,8 @@ class Patient():
         print(f"discarded {initial-len(self.mets)} metastases series, kept metastses: {[met for met in list(self.mets.keys())]}")
     
     def discard_gaps(self, max_gap=120, max_period=360, verbose=False):
-        if verbose: [print(f"Dropping {met.id} for having a gap of more than {max_gap} days in the period of {max_period}") for i, met in self.mets.items() if met.check_interval(max_gap, max_period)]
-        self.mets = {i:met for i,met in self.mets.items() if met.check_interval(max_gap, max_period)}
+        if verbose: [print(f"Dropping {met.id} for having a gap of more than {max_gap} days in the period of {max_period}") for i, met in self.mets.items() if not met.check_interval(max_gap, max_period, verbose)]
+        self.mets = {i:met for i,met in self.mets.items() if met.check_has_no_large_intervals(max_gap, max_period, False)}
     
     def tag_unmatched(self, matched:list):
         """
@@ -140,9 +144,10 @@ class Patient():
         dict_list = []
         keys = None
         for i, ts in self.mets.items():
-                print(f'== working on Metastasis {ts.id}')
+                
             #try:
                 if ts is not None:
+                    print(f'== working on {ts.id}')
                     
                     cur_dict = {}
                     id = f"{self.id}:{ts.id.split(' ')[-1]}"
@@ -165,7 +170,7 @@ class Patient():
                             cur_dict = {**cur_dict, **ts.get_rano('3d')}
 
                         if feature in ['all', 'radiomics']:
-                            cur_dict = {**cur_dict, **ts.get_radiomics()}
+                            cur_dict = {**cur_dict, **ts.get_radiomics(), **ts.get_border_radiomics()}
 
                         if feature in ['all', 'patient_meta']: 
                             cur_dict = {**cur_dict, 'Brain Volume': self.brain_volume}
