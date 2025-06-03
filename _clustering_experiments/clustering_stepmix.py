@@ -20,13 +20,34 @@ warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
     method_name = 'stepmix'
-    folder_name = 'linear_clusters'
-    basedir = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502'
+    folder_name = 'clusters'
     use_derivatives = False
     split_by_vol = False # can be false for no splitting, 'quantile' for quantile splitting, 'meanshift' for using a meanshift to split
-
-    train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_linear_clean/gapfilter_rerun.csv'),
+    discard = ['sub-PAT0122:1', 
+           'sub-PAT0167:0', 
+           'sub-PAT0182:2', 
+           'sub-PAT0342:0', 
+           'sub-PAT0411:0', 
+           'sub-PAT0434:6', 
+           'sub-PAT0434:9', 
+           'sub-PAT0434:10', 
+           'sub-PAT0434:11', 
+           'sub-PAT0480:20', 
+           'sub-PAT0484:4', 
+           'sub-PAT0490:0', 
+           'sub-PAT0612:2', 
+           'sub-PAT0666:0', 
+           'sub-PAT0756:0', 
+           'sub-PAT1028:3',
+           'sub-PAT0045:6',
+           'sub-PAT0105:0',
+           'sub-PAT0441:0', 
+           'sub-PAT0686:1',
+           'sub-PAT0807:3',
+           ]
+    train, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/final_extraction/all_features_nn.csv'),
                                     used_features=['volume'],
+                                    discard=discard,
                                     test_size=None,
                                     drop_suffix=None,
                                     prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
@@ -35,8 +56,6 @@ if __name__ == '__main__':
                                     normalize_suffix=None,
                                     rano_encoding=None,
                                     time_required=False,
-                                    interpolate_CR_swing_length=1,
-                                    drop_CR_swing_length=2,
                                     normalize_volume=None,
                                     add_index_as_col = True,
                                     save_processed=None)#pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/clustering_prerpocessed.csv'))
@@ -75,9 +94,9 @@ if __name__ == '__main__':
     else: subsets= {f'all n_samples{len(all_data)}':all_data} # use all data
 
     for tag, complete_data in subsets.items():
-        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
+        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_{tag} n_clusters')
 
-        k = 5
+        k = 5#range(2,42)
         
         ## load volume data
         data_tps = ["t1", "t2", "t3", "t4", "t5", "t6"]
@@ -141,7 +160,7 @@ if __name__ == '__main__':
         complete_data['cluster'] = labels
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
-        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 0)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
+        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 2)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
 
         DB_score = sklearn.metrics.davies_bouldin_score(filtered_data[data_cols], filtered_data['cluster'])
         print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')

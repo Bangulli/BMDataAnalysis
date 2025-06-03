@@ -41,14 +41,4 @@ from torch_geometric.utils import to_networkx
 import networkx as nx
 
 
-nonin = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_test_torm/train_exp_filtered_series_nonin.csv')
-inter = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn_filtered/noswings_filtered_series.csv')
-
-print(len(nonin), len(inter))
-
-
-print('without swings filter')
-nonin = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn_filtered/filtered_series.csv')
-inter = pd.read_csv('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_test_torm/filtered_series_nonin.csv')
-
-print(len(nonin), len(inter), all(nonin['Lesion ID'] == inter['Lesion ID']))
+data = pd.read_csv()

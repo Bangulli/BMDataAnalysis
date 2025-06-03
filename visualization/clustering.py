@@ -230,6 +230,7 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
 
     df.loc[:, '0'] = 1
     data_cols = ['0']+data_cols
+ 
 
     unique_labels = np.unique(df[label_col])
     print('found unique labels:', unique_labels)
@@ -241,17 +242,18 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
     for i, label in enumerate(unique_labels):
         cluster_df = df[df[label_col] == label]
         for _, row in cluster_df.iterrows():
-            plt.scatter(data_cols, row[data_cols], color=colors[i], alpha=0.3, s=10)
+            plt.scatter(['0', '60', '120', '180', '240', '300', '360'], row[data_cols], color=colors[i], alpha=0.3, s=10)
 
     # Plot average trajectory per cluster
     for i, label in enumerate(unique_labels):
         cluster_df = df[df[label_col] == label]
         mean_traj = cluster_df[data_cols].mean(axis=0)
-        plt.plot(data_cols, mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label} = {len(cluster_df)}')
+        plt.plot(['0', '60', '120', '180', '240', '300', '360'], mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label} = {len(cluster_df)}')
 
     plt.ylim(-0.1, 2)
-    plt.xlabel("Time")
-    plt.ylabel("Value")
+    #plt.yscale('log')
+    plt.xlabel("Time after treatment [days]")
+    plt.ylabel("Relative volume to Treatment")
     plt.title("Combined Trajectories by Cluster")
     plt.legend(loc="upper right")
     plt.grid(True)

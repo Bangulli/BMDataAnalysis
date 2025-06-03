@@ -43,7 +43,7 @@ class FeatureCorrelationEliminator:
             plt.close()
 
         # Threshold for correlation
-        threshold = 0.9
+        threshold = self.threshold
 
         # Absolute correlation matrix
         corr_matrix = corr.abs()

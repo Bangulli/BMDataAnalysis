@@ -16,6 +16,7 @@ import copy
 
 def load_prepro_data(path, 
                      used_features, # tells the method which feature classes to include in the output, for example ['radiomics', 'volume'] will produce a dataframe where each time point has radiomics features and volume
+                     discard=None,
                      categorical=[], # a list of columns with categorical features. Encoding is infered at runtime
                      test_size=0.2, # controls the test set size for splitting
                      drop_suffix=None, # a list of strings, for each timepoint, the column that has a suffix listed here are dropped, for example ['_radiomics_featrue_1'] will drop t0_radiomics_feature_1, t1..... and so on
@@ -45,10 +46,21 @@ def load_prepro_data(path,
     if save_processed is not None:
         if (save_processed.parent/('train_'+save_processed.name)).is_file(): 
             print('found preprocessed dataframes, loading tem instead of doing all the shabang again')
-            if test_size is not None: return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), pd.read_csv(save_processed.parent/('test_'+save_processed.name))
-            else: return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), None
+            if test_size is not None: 
+                tr = pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID')
+                tr['Lesion ID'] = tr.index
+                tr.drop(columns='Lesion ID.1', inplace=True, errors='ignore')
+                return tr, pd.read_csv(save_processed.parent/('test_'+save_processed.name))
+            else: 
+                tr = pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID')
+                tr['Lesion ID'] = tr.index
+                tr.drop(columns='Lesion ID.1', inplace=True, errors='ignore')
+                return tr, None
 
     df = pd.read_csv(path, index_col='Lesion ID') # load
+    if discard is not None: 
+        df.drop(index=discard, inplace=True, axis=1)
+        print("dropping indices:", discard)
     if fill is not None: df.fillna(fill, inplace=True) # fill
     if 'init_volume' in used_features: df['init_volume'] = df['t0_volume'].copy(deep=True)
 
@@ -56,8 +68,8 @@ def load_prepro_data(path,
 
     ## detect outliers and interpolate missing data
     # im sorry this is horrible but it works
-    df, rano_cols = sample_rejection(df, interpolate_CR_swing_length, outlier_detection_factor, prefixes, drop_CR_swing_length)
-    plot_sankey(df[rano_cols], pl.Path(''))
+    # df, rano_cols = sample_rejection(df, interpolate_CR_swing_length, outlier_detection_factor, prefixes, drop_CR_swing_length)
+    # plot_sankey(df[rano_cols], pl.Path(''))
 
     ## encode rano classes
     if rano_encoding is not None:

@@ -1,7 +1,8 @@
 import sklearn
 import numpy as np
+import csv
 
-def classification_evaluation(rano_gt, rano_pd, rano_encoding=None):
+def classification_evaluation(rano_gt, rano_pd, ids, rano_encoding=None, rano_proba=None, out=None):
     res = {}
 
     # compute class weights
@@ -15,9 +16,17 @@ def classification_evaluation(rano_gt, rano_pd, rano_encoding=None):
         rano_gt = [rano_encoding_reverse[v] for v in rano_gt]
         rano_pd = [rano_encoding_reverse[v] for v in rano_pd]
 
+    if out is not None:
+        with open(out/'assignments.csv', 'w') as file:
+            writer = csv.DictWriter(file, fieldnames=['id', 'prediction', 'target', 'confidence'])
+            writer.writeheader()
+            for g, p, c, i in zip(rano_gt, rano_pd, rano_proba, ids):
+                writer.writerow({'id': i, 'prediction': p, 'confidence': c, 'target': g})
+
+
     res['balanced_accuracy'] = sklearn.metrics.accuracy_score(rano_gt, rano_pd, sample_weight=weights)
     res['accuracy'] = sklearn.metrics.accuracy_score(rano_gt, rano_pd)
-    #res['roc_auc'] = sklearn.metrics.roc_auc_score(rano_gt, rano_pd, multi_class='ovr')
+    if rano_proba is not None: res['roc_auc'] = sklearn.metrics.roc_auc_score(rano_gt, rano_proba)
     res['f1'] = sklearn.metrics.f1_score(rano_gt, rano_pd, average='weighted')
     res['precision'] = sklearn.metrics.precision_score(rano_gt, rano_pd, average='weighted')
     res['recall'] = sklearn.metrics.recall_score(rano_gt, rano_pd, average='weighted')

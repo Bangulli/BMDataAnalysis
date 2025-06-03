@@ -106,3 +106,36 @@ class GAT(torch.nn.Module):
     
 
 
+class BigGAT(torch.nn.Module):
+    """
+    Random Bullshit GO!™
+    """
+    def __init__(self, num_classes, num_node_features):
+        super().__init__()
+        ## encoder
+        if num_node_features != 1:
+            self.gat1 = GATv2Conv(num_node_features, round(num_node_features/2), edge_dim=1)
+            self.lin1 = Linear(round(num_node_features/2), num_classes)
+        else:
+            self.gat1 = GATv2Conv(num_node_features, 2, edge_dim=1)
+            self.lin1 = Linear(2, num_classes)
+        #self.gat2 = GATv2Conv(round(num_node_features/2), round(num_node_features/4), edge_dim=1)
+       
+        self.num_classes = num_classes
+
+
+    def forward(self, data):
+        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
+        # encoder pass
+        x = self.gat1(x=x, edge_index=edge_index, edge_attr=edge_attr)
+        x = F.relu(x)
+        # x = self.gat2(x=x, edge_index=edge_index, edge_attr=edge_attr)
+        # x = F.relu(x)
+        x = global_mean_pool(x, data.batch)
+        x = self.lin1(x)
+        if self.num_classes == 1:
+            return x.view(-1)  # Shape [batch_size], raw logits
+        else:
+            return x
+    def save(self, path):
+        torch.save(self, path/'GAT.pkl')

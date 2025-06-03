@@ -22,10 +22,10 @@ warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
     method_name = 'tsxshapes'
-    folder_name = 'final_clusters'
+    folder_name = 'clusters'
     use_derivatives = False
     split_by_vol = False
-    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
+    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/final_extraction/all_features_nn.csv'),
                                 used_features=['volume'],
                                 test_size=None,
                                 drop_suffix=None,
@@ -40,7 +40,7 @@ if __name__ == '__main__':
                                 add_index_as_col = True,
                                 save_processed=None)#pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/clustering_prerpocessed.csv'))
     
-    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_')
+    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_')
 
     k = 42
     

@@ -9,6 +9,7 @@ import pathlib as pl
 from sklearn.metrics import make_scorer, balanced_accuracy_score, f1_score
 from sklearn.datasets import make_regression
 from sklearn.model_selection import GridSearchCV, train_test_split, StratifiedKFold, cross_validate
+import os
 
 def train_classification_model_sweep(model, df_train, df_test, data_prefixes, prediction_targets, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}, working_dir=pl.Path('./'), extra_data=[]):
     """
@@ -98,24 +99,59 @@ def train_classification_model_sweep_cv(model, df, data_prefixes, prediction_tar
         if verbose: [print(f"used feature: {c}") for c in features]
         if verbose: print(f"target variable are: {prediction_targets[-1]} for one year and {prediction_targets[i]} for next value")
 
-        models[key_year] = copy.deepcopy(model)
+        
         if verbose: print("= Initialized models")
 
         # Define scoring dictionary
-        scoring = {
-            'balanced_accuracy': make_scorer(balanced_accuracy_score),
-            'f1': make_scorer(f1_score, average='binary'),  # use 'macro' or 'weighted' for multiclass
-            'precision': make_scorer(sklearn.metrics.precision_score),
-            'recall': make_scorer(sklearn.metrics.recall_score)
-        }
+        # scoring = {
+        #     'balanced_accuracy': make_scorer(balanced_accuracy_score),
+        #     'f1': make_scorer(f1_score, average='binary'),  # use 'macro' or 'weighted' for multiclass
+        #     'precision': make_scorer(sklearn.metrics.precision_score),
+        #     'recall': make_scorer(sklearn.metrics.recall_score)
+        # }
 
-        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        results = cross_validate(models[key_year], df[features], df[prediction_targets[-1]], cv=cv, scoring=scoring)
-        results = {k.replace('test_',''):np.mean(v) for k, v in results.items()}
-        print(results)
+        # cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        # results = cross_validate(models[key_year], df[features], df[prediction_targets[-1]], cv=cv, scoring=scoring)
+        # results = {k.replace('test_',''):np.mean(v) for k, v in results.items()}
+        # print(results)
 
-        
-        quant_results[key_year] = results
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        all_folds = []
+        for fold, (train_idx, val_idx) in enumerate(skf.split(df, df[prediction_targets[-1]])):
+            print(f"Fold {fold+1}")
+            wdir = working_dir/f"Fold {fold+1}"/key_year
+            os.makedirs(wdir, exist_ok=True)
+            train_df = df.iloc[train_idx].reset_index(drop=True)
+            test_df = df.iloc[val_idx].reset_index(drop=True)
+            fold_model = copy.deepcopy(model)
+            fold_model.fit(train_df[features], train_df[prediction_targets[-1]])
+
+            gt = test_df[prediction_targets[-1]]
+            ids = test_df['Lesion ID']
+            pred = fold_model.predict(test_df[features])
+            prob = fold_model.predict_proba(test_df[features])[:, 1]
+
+            all_folds.append(classification_evaluation(gt, pred, ids, rano_encoding, prob, wdir))
+
+            torch.save(fold_model, wdir/'model.pkl')
+            
+
+        interim = {}
+        for elem in all_folds:
+            for k, v in elem.items():
+                if k == 'confusion_matrix' or k=='classification_report':continue
+                if not k in interim.keys():
+                    interim[k] = [v]
+                else:
+                    interim[k].append(v)
+        #print(interim)
+        interim_std = {}
+        for k in interim.keys():
+            interim_std[k] = np.std(interim[k])
+            interim[k] = np.mean(interim[k])
+        quant_results[key_year] = interim
+        #all_stds[key_year] = interim_std
+        #quant_results[key_year] = all_folds
         if verbose: print(f"=== One Year Model {key_year} achieved results {quant_results[key_year]} for quantity")
         
 

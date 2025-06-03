@@ -11,7 +11,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from visualization import *
 from typing import Any, List, Tuple, Union
-
+from sklearn.model_selection import StratifiedKFold
 import numpy as np
 import torch
 from torch import Tensor, nn
@@ -160,23 +160,67 @@ def ldam_loss(input, target, weight):
 if __name__ == '__main__':
 ########## setup
     options=[
-         {'prediction': '1v3', 
+         {'prediction': 'binary', 
          'selection': None, 
-         'model': 'SimplestGCN', 
+         'model': 'GAT', 
          'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep'],
-         'transforms': T.Compose([AddNoise(0.5), FeatureDropout(0.1)]),
+         'feats': ['volume'],#, 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
          'fully_connect': True,
          'direction': 'past',
          'loss_balance': True,
          'noise_level': .5},
 
-         {'prediction': '1v3', 
+         {'prediction': 'binary', 
          'selection': None, 
-         'model': 'SimpleGCN', 
+         'model': 'GAT', 
          'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep'],
-         'transforms': T.Compose([AddNoise(0.5), FeatureDropout(0.1)]),
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location'],#, 'radiomics_original', 'border_radiomics', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+         {'prediction': 'binary', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics'],#, 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+         {'prediction': 'binary', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+         {'prediction': 'binary', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+          {'prediction': '1v3', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume'],#, 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
          'fully_connect': True,
          'direction': 'past',
          'loss_balance': True,
@@ -186,25 +230,78 @@ if __name__ == '__main__':
          'selection': None, 
          'model': 'GAT', 
          'loss': 'cross_entropy',  
-         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'deep'],
-         'transforms': T.Compose([AddNoise(0.5), FeatureDropout(0.1)]),
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location'],#, 'radiomics_original', 'border_radiomics', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
          'fully_connect': True,
          'direction': 'past',
          'loss_balance': True,
          'noise_level': .5},
 
+         {'prediction': '1v3', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics'],#, 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+         {'prediction': '1v3', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
+
+         {'prediction': '1v3', 
+         'selection': None, 
+         'model': 'GAT', 
+         'loss': 'cross_entropy',  
+         'feats': ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'deep'],
+         'transforms': T.Compose([AddNoise(1), FeatureDropout(0.3)]),
+         'fully_connect': True,
+         'direction': 'past',
+         'loss_balance': True,
+         'noise_level': .5},
     ]
 
     for i, config in enumerate(options):
-        data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features_vincent_foundation.csv')
+        data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/final_extraction/all_features_none.csv')
         prediction_type = config['prediction']
         feature_selection = config['selection']
         method = config['model']
         loss_func = config['loss']
-        output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/output/graph_ml_lvl_4-model')
+        output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/graph_ml_general_noisy_5fold')
         used_features = config['feats']
         categorical =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']
-
+        discard = ['sub-PAT0122:1', 
+           'sub-PAT0167:0', 
+           'sub-PAT0182:2', 
+           'sub-PAT0342:0', 
+           'sub-PAT0411:0', 
+           'sub-PAT0434:6', 
+           'sub-PAT0434:9', 
+           'sub-PAT0434:10', 
+           'sub-PAT0434:11', 
+           'sub-PAT0480:20', 
+           'sub-PAT0484:4', 
+           'sub-PAT0490:0', 
+           'sub-PAT0612:2', 
+           'sub-PAT0666:0', 
+           'sub-PAT0756:0', 
+           'sub-PAT1028:3',
+           'sub-PAT0045:6',
+           'sub-PAT0105:0',
+           'sub-PAT0441:0', 
+           'sub-PAT0686:1',
+           'sub-PAT0807:3',
+           ] 
 
         if prediction_type == 'binary':
             rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
@@ -226,6 +323,16 @@ if __name__ == '__main__':
                 loss = focal_loss
             elif loss_func == 'ldam':
                 loss = ldam_loss
+        elif prediction_type == 'sota':
+            rano_encoding={'CR':0, 'PR':0, 'SD':0, 'PD':1}
+            num_out=1
+            classes=['non-PR', 'PR']
+            if loss_func == 'cross_entropy':
+                loss = F.binary_cross_entropy_with_logits
+            elif loss_func == 'focal':
+                loss = focal_loss
+            elif loss_func == 'ldam':
+                loss = ldam_loss
         else:
             rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}
             classes = list(rano_encoding.keys())
@@ -241,7 +348,7 @@ if __name__ == '__main__':
         else:
             eliminator = None
 
-        data_prefixes = ["t0", "t1", "t2", "t3", "t4", "t5", "t6"] # used in the training method to select the features for each step of the sweep
+        data_prefixes = [f"t{x}" for x in range(38)] # used in the training method to select the features for each step of the sweep
         volume_cols = [c+'_volume' for c in data_prefixes] # used to normalize the volumes
         rano_cols = [elem+'_rano' for elem in data_prefixes] # used in the training method to select the current targets
 
@@ -250,11 +357,12 @@ if __name__ == '__main__':
         with open(output/'exp_config.csv', 'w') as file:
             file.write(str(config))
 
-        train_data, test_data = d.load_prepro_data(data,
+        data, _ = d.load_prepro_noisy_data(data,
                                             categorical=categorical,
+                                            discard=discard,
                                             fill=0,
                                             used_features=used_features,
-                                            test_size=0.2,
+                                            test_size=None,
                                             drop_suffix=eliminator,
                                             prefixes=data_prefixes,
                                             target_suffix='rano',
@@ -264,20 +372,25 @@ if __name__ == '__main__':
                                             interpolate_CR_swing_length=1,
                                             drop_CR_swing_length=2,
                                             normalize_volume='std',
-                                            save_processed=output.parent/'encoding_test_used_data.csv')
-        extra_data = [c for c in train_data.columns if not (c.startswith('ignored') or c.split('_')[0] in data_prefixes)]
+                                            target_time=360,
+                                            add_index_as_col=True,
+                                            save_processed=output.parent/'data.csv')
+        
+        extra_data = [c for c in data.columns if not (c.startswith('ignored') or c.startswith('target') or c.split('_')[0] in data_prefixes or 'Lesion ID' in c)]
         print("using extra data cols", extra_data)
-        dist = Counter(test_data['t6_rano'])
+        dist = Counter(data['target_rano'])
+        inv_enc = {v:k for v,k in enumerate(classes)}
+        dist = {inv_enc[k]:v for k,v in dist.items()}
 
         os.makedirs(output, exist_ok=True)
         with open(output/'used_feature_names.txt', 'w') as file:
             file.write("Used feature names left in the dataframe:\n")
-            for c in train_data.columns:
+            for c in data.columns:
                 file.write(f"   - {c}\n")
             file.write("NOTE: rano columns are used as targets not as prediction")
 
         ## class weight definition for torch
-        labels = [row['t6_rano'] for i, row in train_data.iterrows()]
+        labels = [row['target_rano'] for i, row in data.iterrows()]
         label_counts = Counter(labels)
         num_classes = len(label_counts)  # or len(label_counts)
         counts = torch.tensor([label_counts[i] for i in range(num_classes)], dtype=torch.float)
@@ -285,37 +398,30 @@ if __name__ == '__main__':
         torch_weights = torch_weights / torch_weights.sum()  # Normalize (optional but nice)
 
 
-
-        train_transforms = config['transforms']
-        test_transforms = None#T.Compose([T.LocalDegreeProfile(), T.GDC()])
-
-        all_results = {}
-        for i in range(2, len(data_prefixes)):
-            key_year = f"1yr_{data_prefixes[:i]}->t6_rano"
+        
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        all_folds = []
+        for fold, (train_idx, val_idx) in enumerate(skf.split(data, data['target_rano'])):
+            print(f"Fold {fold+1}")
+            wdir = output/f"Fold {fold+1}"
+            os.makedirs(wdir, exist_ok=True)
+            train_df = data.iloc[train_idx].reset_index(drop=True)
+            test_df   = data.iloc[val_idx].reset_index(drop=True)
             # make datasets
-            dataset_train = d.BrainMetsGraphClassification(train_data,
-                used_timepoints = data_prefixes[:i], 
+            dataset_train = d.NoisyBrainMetsGraphClassification(train_df,
+                used_timedelta = 330, 
                 ignored_suffixes = ('_timedelta_days', '_rano', 'Lesion ID'), 
                 rano_encoding = rano_encoding,
-                target_name = 't6_rano',
+                target_name = 'target_rano',
                 extra_features = extra_data,
                 fully_connected=config['fully_connect'],
                 direction=config['direction'],
-                transforms = train_transforms,
-                )
-            dataset_test = d.BrainMetsGraphClassification(test_data,
-                used_timepoints = data_prefixes[:i], 
-                ignored_suffixes = ('_timedelta_days', '_rano', 'Lesion ID'), 
-                rano_encoding = rano_encoding,
-                target_name = 't6_rano',
-                extra_features = extra_data,
-                fully_connected=config['fully_connect'],
-                transforms = test_transforms,
-                direction = config['direction']
+                transforms = config['transforms'],
+                random_period = True,
                 )
             
-            experiment_dir = output/key_year
-            os.makedirs(experiment_dir, exist_ok=True)
+            
+            
 
             # init training variables
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -327,12 +433,14 @@ if __name__ == '__main__':
                 model = GCN(num_out, dataset_train.get_node_size()).to(device)
             elif method == 'GAT':
                 model = GAT(num_out, dataset_train.get_node_size()).to(device)
+            elif method == 'BigGAT':
+                model = BigGAT(num_out, dataset_train.get_node_size()).to(device)
             else:
                 raise RuntimeError(f"Unrecognized method name, cant resolve correct model for {method}")
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=5e-4)
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
                 optimizer,
-                T_0=20,       # First restart after 10 epochs
+                T_0=50,       # First restart after 10 epochs
                 T_mult=2,     # Increase period between restarts by this factor
                 eta_min=1e-6  # Minimum LR
             )
@@ -344,7 +452,7 @@ if __name__ == '__main__':
                                             epochs=1000,
                                             optimizer=optimizer,
                                             scheduler=scheduler,
-                                            working_dir=experiment_dir,
+                                            working_dir=wdir,
                                             device=device,
                                             validation=0.25,
                                             batch_size=128,
@@ -352,12 +460,33 @@ if __name__ == '__main__':
                                             )
             print(f"Best model achieved loss {best_loss:4f}")
 
-            # evaluate
-            best_res = torch_engine.test_classification(best_model, dataset_test, experiment_dir, device, rano_encoding, num_out==1)
-            print(f"""Best model achieved a class weight balanced accuracy {best_res['balanced_accuracy']:4f}""")
-            print(best_res['classification_report'])
-            all_results[key_year] = best_res
+        
+            all_results = {}
+            timedeltas = [0, 90, 150, 210, 270, 330]
+            for i in range(0, len(timedeltas)):
+                key_year = f"1yr_t0:{timedeltas[i]}->target_rano"
+                dataset_test = d.NoisyBrainMetsGraphClassification(test_df,
+                used_timedelta = timedeltas[i], 
+                ignored_suffixes = ('_timedelta_days', '_rano', 'Lesion ID'), 
+                rano_encoding = rano_encoding,
+                target_name = 'target_rano',
+                extra_features = extra_data,
+                fully_connected=config['fully_connect'],
+                transforms = None,
+                direction = config['direction'],
+                random_period=False,
+                )
+                experiment_dir = wdir/key_year
+                os.makedirs(experiment_dir, exist_ok=True)
+                # evaluate
+                best_res = torch_engine.test_classification(best_model, dataset_test, experiment_dir, 'cuda', rano_encoding, num_out==1)
+                print(f"""Best model achieved a class weight balanced accuracy {best_res['balanced_accuracy']:4f}""")
+                print(best_res['classification_report'])
+                all_results[key_year] = best_res
 
-            # plot
-            plot_prediction_metrics(best_res, experiment_dir)
-        plot_prediction_metrics_sweep(all_results, output, classes=classes, distribution=dist)
+                # plot
+                plot_prediction_metrics(best_res, experiment_dir)
+            plot_prediction_metrics_sweep(all_results, wdir, classes=classes, distribution=dist)
+            all_folds.append(all_results)
+        
+        plot_prediction_metrics_sweep_fold(all_folds, output, classes=classes, distribution=dist)

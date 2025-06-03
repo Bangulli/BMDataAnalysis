@@ -44,7 +44,7 @@ if __name__ == '__main__':
         p.discard_gaps(120, 360, False)
         p.discard_swings(420, False)
         #p.resample_all_timeseries(360, 6, 'nearest')
-        p.drop_short_timeseries()
+        p.drop_short_timeseries(330)
         print('== extracting features for patient:', pat)
         v, keys = p.get_features(['all'], deep_extractor=extractor)
         if keys: all_keys += [k for k in keys if k not in all_keys] # this is going to cost a lot of time but is necessary for noninterpolated extraction, because the feature dicts will be of variable length so the csv dict writer needs to get all feature keys to make sure it works

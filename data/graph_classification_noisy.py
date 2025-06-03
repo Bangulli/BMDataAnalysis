@@ -1,9 +1,10 @@
 from torch_geometric.data import Data, Dataset, InMemoryDataset
 import torch
 import pandas as pd
+import random
 from scipy.stats import zscore
 
-def row2graph(row: pd.Series, timedelta_cutoff: int, extra_features: list, y_name:str, fully_connected=True, direction=None, ignore_types: tuple = ('_timedelta_days', '_rano', 'Lesion ID'), verbose=False):
+def row2graph(row: pd.Series, id, timedelta_cutoff: int, extra_features: list, y_name:str, fully_connected=True, direction=None, ignore_types: tuple = ('_timedelta_days', '_rano', 'Lesion ID'), verbose=False, random_period=False):
     # prepare variables and data
     row = pd.to_numeric(row, errors='coerce') # saveguard against missparsed data
     row.fillna(0, inplace=True) # saveguard against nan in data
@@ -14,7 +15,9 @@ def row2graph(row: pd.Series, timedelta_cutoff: int, extra_features: list, y_nam
     tds = [c for c in row.index.tolist() if "timedelta_days" in c]
     timepoints = [tp.split('_')[0] for tp in tds if row[tp]<=timedelta_cutoff and row[tp]!=0] + ['t0']
     timepoints.sort()
-
+    if random_period:
+        cutoff = random.randint(1, len(timepoints))
+        timepoints=timepoints[:cutoff]
     # create a graph where each node is connected to each other node with a direct edge and its corresponding value
     if fully_connected: 
         if len(timepoints) >= 2:
@@ -107,6 +110,8 @@ def row2graph(row: pd.Series, timedelta_cutoff: int, extra_features: list, y_nam
     # parse to graph Data object
     data = Data(x=x, edge_index=edge_index, edge_weights=edge_weights, y=y, edge_attr=edge_attributes)
     data.rano = y
+    #data.id = row['Lesion ID']
+    data.id = id
     # Debug and validation
     if verbose: print(data, data.validate())
     else: data.validate(raise_on_error=True)
@@ -125,6 +130,7 @@ class NoisyBrainMetsGraphClassification(Dataset):
                  extra_features = None,
                  transforms = None,
                  direction = None,
+                 random_period=False
                  ):
         self.table = df
         self.used_timedelta = used_timedelta
@@ -135,6 +141,7 @@ class NoisyBrainMetsGraphClassification(Dataset):
         self.transforms = transforms
         self.fully_connected = fully_connected
         self.direction = direction
+        self.random_period = random_period
         self._encode_rano()
 
     def __len__(self):
@@ -145,7 +152,9 @@ class NoisyBrainMetsGraphClassification(Dataset):
     
     def __getitem__(self, idx):
         row = self.table.iloc[idx, :]
-        graph = row2graph(row=row, timedelta_cutoff=self.used_timedelta, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction)
+        id = row['Lesion ID']
+        graph = row2graph(row=row, id=id, timedelta_cutoff=self.used_timedelta, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction, random_period=self.random_period)
+      
         if self.transforms:
             graph = self.transforms(graph)
         return graph

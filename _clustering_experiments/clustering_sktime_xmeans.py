@@ -22,10 +22,10 @@ warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
     method_name = 'tsxmeans'
-    folder_name = 'final_clusters'
+    folder_name = 'clusters'
     use_derivatives = False
     split_by_vol = False
-    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
+    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/final_extraction/all_features_nn.csv'),
                                 used_features=['volume'],
                                 test_size=None,
                                 drop_suffix=None,
@@ -40,7 +40,7 @@ if __name__ == '__main__':
                                 add_index_as_col = True,
                                 save_processed=None)#pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/clustering_prerpocessed.csv'))
     
-    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_')
+    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_')
     
     if not split_by_vol: subsets={f'all n_samples{len(all_data)}':all_data} # use all data
     elif split_by_vol=='meanshift':
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     else: subsets= {f'all n_samples{len(all_data)}':all_data} # use all data
 
     for tag, complete_data in subsets.items():
-        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
+        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_{tag} n_clusters')
 
         k = 30
         
@@ -126,7 +126,7 @@ if __name__ == '__main__':
         complete_data['cluster'] = labels
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
-        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 15)
+        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 2)
 
         DB_score = sklearn.metrics.davies_bouldin_score(complete_data[data_cols], complete_data['cluster'])
         print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')

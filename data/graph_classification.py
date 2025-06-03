@@ -2,8 +2,9 @@ from torch_geometric.data import Data, Dataset, InMemoryDataset
 import torch
 import pandas as pd
 from scipy.stats import zscore
+import random
 
-def row2graph(row: pd.Series, timepoints: list, extra_features: list, y_name:str, fully_connected=True, direction=None, ignore_types: tuple = ('_timedelta_days', '_rano', 'Lesion ID'), verbose=False):
+def row2graph(row: pd.Series, id, timepoints: list, extra_features: list, y_name:str, fully_connected=True, direction=None, ignore_types: tuple = ('_timedelta_days', '_rano', 'Lesion ID'), verbose=False):
     # prepare variables and data
     row = pd.to_numeric(row, errors='coerce') # saveguard against missparsed data
     row.fillna(0, inplace=True) # saveguard against nan in data
@@ -75,14 +76,23 @@ def row2graph(row: pd.Series, timepoints: list, extra_features: list, y_name:str
                     edge_attributes.append((row[f"{timepoints[i+1]}_timedelta_days"] - row[f"{tp}_timedelta_days"])/365.25)
     
     # parse to torch
-    edge_index = torch.tensor(edge_index, dtype = torch.long).t().contiguous()
     x = torch.tensor(node_values, dtype=torch.float)
+    #print(x.shape)
     y = torch.tensor([row[y_name]], dtype=torch.long) # for graph level target needs shape [1, *]
-    edge_weights = torch.tensor(edge_weights, dtype=torch.float)
-    edge_attributes = torch.tensor(edge_attributes, dtype=torch.float)
+    if any(edge_index):
+        edge_index = torch.tensor(edge_index, dtype = torch.long).t().contiguous()
+        edge_weights = torch.tensor(edge_weights, dtype=torch.float)
+        edge_attributes = torch.tensor(edge_attributes, dtype=torch.float)
+    else:
+        edge_index = torch.tensor([[0,0]], dtype = torch.long).t().contiguous()
+        edge_weights = torch.tensor([[0]], dtype=torch.float)
+        edge_attributes = torch.tensor([0], dtype=torch.float)
+    #print('Construction nodes with features', feature_names)
     # parse to graph Data object
     data = Data(x=x, edge_index=edge_index, edge_weights=edge_weights, y=y, edge_attr=edge_attributes)
     data.rano = y
+    #data.id = row['Lesion ID']
+    data.id = id
     # Debug and validation
     if verbose: print(data, data.validate())
     else: data.validate(raise_on_error=True)
@@ -101,6 +111,7 @@ class BrainMetsGraphClassification(Dataset):
                  extra_features = None,
                  transforms = None,
                  direction = None,
+                 random_period = False,
                  ):
         self.table = df
         self.used_timepoints = used_timepoints
@@ -111,6 +122,7 @@ class BrainMetsGraphClassification(Dataset):
         self.transforms = transforms
         self.fully_connected = fully_connected
         self.direction = direction
+        self.random_period = random_period
         self._encode_rano()
 
     def __len__(self):
@@ -121,7 +133,11 @@ class BrainMetsGraphClassification(Dataset):
     
     def __getitem__(self, idx):
         row = self.table.iloc[idx, :]
-        graph = row2graph(row=row, timepoints=self.used_timepoints, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction)
+        id = row['Lesion ID']
+        if not self.random_period: graph = row2graph(row=row, id=id, timepoints=self.used_timepoints, extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction)
+        else:
+            cutoff = random.randint(1, len(self.used_timepoints))
+            graph = row2graph(row=row, id=id, timepoints=self.used_timepoints[:cutoff], extra_features=self.extra_features, y_name=self.target_name, ignore_types=self.ignored_suffixes, fully_connected=self.fully_connected, direction=self.direction)
         if self.transforms:
             graph = self.transforms(graph)
         return graph

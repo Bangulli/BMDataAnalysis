@@ -25,8 +25,31 @@ if __name__ == '__main__':
     folder_name = 'final_clusters'
     use_derivatives = False
     split_by_vol = False
-    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/features.csv'),
+    discard = ['sub-PAT0122:1', 
+           'sub-PAT0167:0', 
+           'sub-PAT0182:2', 
+           'sub-PAT0342:0', 
+           'sub-PAT0411:0', 
+           'sub-PAT0434:6', 
+           'sub-PAT0434:9', 
+           'sub-PAT0434:10', 
+           'sub-PAT0434:11', 
+           'sub-PAT0480:20', 
+           'sub-PAT0484:4', 
+           'sub-PAT0490:0', 
+           'sub-PAT0612:2', 
+           'sub-PAT0666:0', 
+           'sub-PAT0756:0', 
+           'sub-PAT1028:3',
+           'sub-PAT0045:6',
+           'sub-PAT0105:0',
+           'sub-PAT0441:0', 
+           'sub-PAT0686:1',
+           'sub-PAT0807:3',
+           ] 
+    all_data, test = load_prepro_data(pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/final_extraction/all_features_nn.csv'),
                                 used_features=['volume'],
+                                discard=discard,
                                 test_size=None,
                                 drop_suffix=None,
                                 prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"],
@@ -40,7 +63,7 @@ if __name__ == '__main__':
                                 add_index_as_col = True,
                                 save_processed=None)#pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/csv_nn/clustering_prerpocessed.csv'))
     
-    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_')
+    output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_')
     
     if not split_by_vol: subsets={f'all n_samples{len(all_data)}':all_data} # use all data
     elif split_by_vol=='meanshift':
@@ -74,7 +97,7 @@ if __name__ == '__main__':
     else: subsets= {f'all n_samples{len(all_data)}':all_data} # use all data
 
     for tag, complete_data in subsets.items():
-        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/output/{folder_name}/{method_name}_{tag} n_clusters')
+        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_{tag} n_clusters')
 
         k = 5
         

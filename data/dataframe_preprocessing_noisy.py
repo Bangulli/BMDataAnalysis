@@ -18,7 +18,8 @@ import time
 
 def load_prepro_noisy_data(path, 
                      used_features, # tells the method which feature classes to include in the output, for example ['radiomics', 'volume'] will produce a dataframe where each time point has radiomics features and volume
-                     categorical, # a list of columns with categorical features. Encoding is infered at runtime
+                     categorical=[], # a list of columns with categorical features. Encoding is infered at runtime
+                     discard=None,
                      test_size=0.2, # controls the test set size for splitting
                      drop_suffix=None, # a list of strings, for each timepoint, the column that has a suffix listed here are dropped, for example ['_radiomics_featrue_1'] will drop t0_radiomics_feature_1, t1..... and so on
                      prefixes=["t0", "t1", "t2", "t3", "t4", "t5", "t6"], # the list of timepoint prefixes to include, only timepoints listed here are included
@@ -32,7 +33,7 @@ def load_prepro_noisy_data(path,
                      normalize_volume=None, # wheter or not to normalize the volume and if so what kind of normalization to use: True=norm values by t0, False=No norm, '3root' use cubic rood
                      save_processed = None, # saves preprocessed data to here if exists will load and return
                      outlier_detection_factor = 5, # if a lesion shrinks or grows by more than this factor in between two neighboring timepoints during its observation it is regarded as an outlier and dropped
-                     add_index_as_col=False,
+                     add_index_as_col=True,
                      target_time=None): 
     """
     Main data loading and preprocessing function
@@ -46,15 +47,32 @@ def load_prepro_noisy_data(path,
 
     """
     if save_processed is not None:
-        if (save_processed.parent/('train_'+save_processed.name)).is_file(): 
+        if (save_processed.parent/('train_'+save_processed.name)).is_file() and not add_index_as_col: 
             print('found preprocessed dataframes, loading tem instead of doing all the shabang again')
             if test_size is not None: return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), pd.read_csv(save_processed.parent/('test_'+save_processed.name))
             else: return pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID'), None
+        elif (save_processed.parent/('train_'+save_processed.name)).is_file():
+            print('found preprocessed dataframes, loading tem instead of doing all the shabang again')
+            if test_size is not None: 
+                tr = pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID')
+                tr['Lesion ID'] = tr.index
+                tr.drop(columns='Lesion ID.1', inplace=True, errors='ignore')
+                te = pd.read_csv(save_processed.parent/('test_'+save_processed.name))
+                te['Lesion ID'] = te.index
+                te.drop(columns='Lesion ID.1', inplace=True, errors='ignore')
+                return tr, te
+            else: 
+                tr = pd.read_csv(save_processed.parent/('train_'+save_processed.name), index_col='Lesion ID')
+                tr['Lesion ID'] = tr.index
+                tr.drop(columns='Lesion ID.1', inplace=True, errors='ignore')
+                return tr, None
     start = time.time()
     df = pd.read_csv(path, index_col='Lesion ID') # load
     end = time.time()
     print(f"Read {len(df)} samples from csv in {end - start:.6f} seconds, filesize: {os.path.getsize(path)}")
-    
+    if discard is not None: 
+        df.drop(index=discard, inplace=True, axis=1)
+        print('Dropping indices:', discard)
     if 'init_volume' in used_features: df['init_volume'] = df['t0_volume'].copy(deep=True)
 
     ## this is for uninterpolated data. It generates a target variable based on interpolation
@@ -66,19 +84,25 @@ def load_prepro_noisy_data(path,
             smaller = (None, -np.inf)
             bigger = (None, np.inf)
             exact = None
-            for c in dt_cols:
+            for j, c in enumerate(dt_cols):
                 if pd.isna(row[c]):
                     print('time series ended at col',c)
+                    if bigger[0] is None:
+                        print('there was insufficient data to interpolate with posterior data')
+                        bigger = (dt_cols[j], row[dt_cols[j]] - target_time)
+                        smaller = (dt_cols[j-1], row[dt_cols[j-1]] - target_time)
                     break
                 if row[c] == target_time:
                     exact = c
                     break
                 # smaller case
                 if row[c] - target_time < 0 and row[c] - target_time > smaller[1]:
+                    #print('updating smaller', (c, row[c] - target_time), row[c])
                     smaller = (c, row[c] - target_time)
                 # bigger case
                 if row[c] - target_time > 0 and row[c] - target_time < bigger[1]:
-                    bigger = (c, target_time - row[c])
+                    #print('updating bigger', (c,  row[c] - target_time), row[c])
+                    bigger = (c,  row[c] - target_time)
 
             if exact:
                 tp = exact.split('_')[0]
@@ -107,62 +131,62 @@ def load_prepro_noisy_data(path,
 
     ## detect outliers and interpolate missing data
     # im sorry this is horrible but it works
-    print('Detecting and adressing outliers')
-    drop_rows = []
-    drop_row_for_dips_and_spikes =[]
-    interpolate_rows = []
-    for id, row in df.iterrows():                                                             # target time plus offset to account for t6 probs
-        if target_time: ps = [t for i, t in enumerate(prefixes) if row[f"{t}_timedelta_days"]<target_time+60 and ((i!=0 and row[f"{t}_timedelta_days"]!=0)or(i==0 and row[f"{t}_timedelta_days"]==0))]
-        else: ps = prefixes
-        rano_cols = [f"{prfx}_rano" for prfx in ps if prfx != 't0']
-        volume_cols = [f"{prfx}_volume" for prfx in ps]
-        targets=row[rano_cols] 
-        values = targets.values
-        columns = targets.index
-        volumes=row[volume_cols]
-        drop_rows_dipsike = []
-        compressed_rano = []
-        for i, j in enumerate(values):
+    # print('Detecting and adressing outliers')
+    # drop_rows = []
+    # drop_row_for_dips_and_spikes =[]
+    # interpolate_rows = []
+    # for id, row in df.iterrows():                                                             # target time plus offset to account for t6 probs
+    #     if target_time: ps = [t for i, t in enumerate(prefixes) if row[f"{t}_timedelta_days"]<target_time+60 and ((i!=0 and row[f"{t}_timedelta_days"]!=0)or(i==0 and row[f"{t}_timedelta_days"]==0))]
+    #     else: ps = prefixes
+    #     rano_cols = [f"{prfx}_rano" for prfx in ps if prfx != 't0']
+    #     volume_cols = [f"{prfx}_volume" for prfx in ps]
+    #     targets=row[rano_cols] 
+    #     values = targets.values
+    #     columns = targets.index
+    #     volumes=row[volume_cols]
+    #     drop_rows_dipsike = []
+    #     compressed_rano = []
+    #     for i, j in enumerate(values):
 
-            ## experimental CR swing rejector
-            j = 'non-CR' if j != 'CR' else j
-            if i == 0: compressed_rano.append([1,j, [columns[i]]])
-            else:
-                if compressed_rano[len(compressed_rano)-1][1] == j:
-                    compressed_rano[len(compressed_rano)-1][0] += 1
-                    compressed_rano[len(compressed_rano)-1][2] = compressed_rano[len(compressed_rano)-1][2] + [columns[i]]
-                else:
-                    compressed_rano.append([1,j, [columns[i]]])
+    #         ## experimental CR swing rejector
+    #         j = 'non-CR' if j != 'CR' else j
+    #         if i == 0: compressed_rano.append([1,j, [columns[i]]])
+    #         else:
+    #             if compressed_rano[len(compressed_rano)-1][1] == j:
+    #                 compressed_rano[len(compressed_rano)-1][0] += 1
+    #                 compressed_rano[len(compressed_rano)-1][2] = compressed_rano[len(compressed_rano)-1][2] + [columns[i]]
+    #             else:
+    #                 compressed_rano.append([1,j, [columns[i]]])
 
-            ## experimental spike/dip outliere rejector
-            if outlier_detection_factor is not None and id not in drop_rows_dipsike and i<len(values)-1 and id not in drop_rows and id not in interpolate_rows:
-                vol_prev = max(volumes[i], 1e-6)
-                vol_cur = max( volumes[i+1], 1e-6)
-                vol_post = max(volumes[i+2], 1e-6)
-                if vol_cur/vol_prev > outlier_detection_factor and vol_post/vol_cur < 1/outlier_detection_factor:# check if it spikes upwards
-                    drop_rows_dipsike.append(id)
-                elif vol_cur/vol_prev < 1/outlier_detection_factor and vol_post/vol_cur > outlier_detection_factor:# check if it dips downwards
-                    drop_rows_dipsike.append(id)
+    #         ## experimental spike/dip outliere rejector
+    #         if outlier_detection_factor is not None and id not in drop_rows_dipsike and i<len(values)-1 and id not in drop_rows and id not in interpolate_rows:
+    #             vol_prev = max(volumes[i], 1e-6)
+    #             vol_cur = max( volumes[i+1], 1e-6)
+    #             vol_post = max(volumes[i+2], 1e-6)
+    #             if vol_cur/vol_prev > outlier_detection_factor and vol_post/vol_cur < 1/outlier_detection_factor:# check if it spikes upwards
+    #                 drop_rows_dipsike.append(id)
+    #             elif vol_cur/vol_prev < 1/outlier_detection_factor and vol_post/vol_cur > outlier_detection_factor:# check if it dips downwards
+    #                 drop_rows_dipsike.append(id)
 
-        if [swing for swing in compressed_rano[:-1] if swing[0]>=drop_CR_swing_length and swing[1]=='CR'] and id not in drop_rows:
-            print(f"Metastasis {id} is dropped and has rano compression: {compressed_rano}")
-            drop_rows.append(id)
+    #     if [swing for swing in compressed_rano[:-1] if swing[0]>=drop_CR_swing_length and swing[1]=='CR'] and id not in drop_rows:
+    #         print(f"Metastasis {id} is dropped and has rano compression: {compressed_rano}")
+    #         drop_rows.append(id)
         
-        if [swing for swing in compressed_rano[:-1] if swing[0]<=interpolate_CR_swing_length and swing[1]=='CR'] and id not in drop_rows:
-            print(f"Metastasis {id} is interpolated and has rano compression: {compressed_rano}")
-            interpolate_rows.append((id, compressed_rano))
+    #     if [swing for swing in compressed_rano[:-1] if swing[0]<=interpolate_CR_swing_length and swing[1]=='CR'] and id not in drop_rows:
+    #         print(f"Metastasis {id} is interpolated and has rano compression: {compressed_rano}")
+    #         interpolate_rows.append((id, compressed_rano))
         
-        if id in drop_rows_dipsike and id not in drop_rows and id not in [tag[0] for tag in interpolate_rows]:
-            print(f"Metastasis {id} is dropped for a suspicious spike")
-            drop_rows.append(id)
-            drop_row_for_dips_and_spikes.append(id)
+    #     if id in drop_rows_dipsike and id not in drop_rows and id not in [tag[0] for tag in interpolate_rows]:
+    #         print(f"Metastasis {id} is dropped for a suspicious spike")
+    #         drop_rows.append(id)
+    #         drop_row_for_dips_and_spikes.append(id)
 
-    print(f"{len(drop_rows)} are dropped because of long CR swings")
-    print(f"{len(drop_row_for_dips_and_spikes)} of those are because of dips and spikes")
+    # print(f"{len(drop_rows)} are dropped because of long CR swings")
+    # print(f"{len(drop_row_for_dips_and_spikes)} of those are because of dips and spikes")
 
-    df = df.drop(drop_rows, axis='index')
-    df = apply_interpolation_for_target_CR(df, interpolate_rows, interpolate_CR_swing_length, prefixes)
-    plot_sankey(df[rano_cols], pl.Path(''))
+    # df = df.drop(drop_rows, axis='index')
+    # df = apply_interpolation_for_target_CR(df, interpolate_rows, interpolate_CR_swing_length, prefixes)
+    # plot_sankey(df[rano_cols], pl.Path(''))
 
     if fill is not None: df.fillna(fill, inplace=True) # fill
 
@@ -185,6 +209,7 @@ def load_prepro_noisy_data(path,
     labels = [d[f'{prefixes[-1]}_{target_suffix}'] for i, d in df.iterrows()]
     print('Extracted targets from column', f'{prefixes[-1]}_{target_suffix}')
     if test_size is not None: df, test = train_test_split(df, test_size=test_size, random_state=42, stratify=labels)
+    else: test = None
     
     # normalize volume feature
     if normalize_volume:
@@ -255,18 +280,18 @@ def load_prepro_noisy_data(path,
             else:
                 
                 if isinstance(fmt, list):
-            
-                    for j, id in enumerate(test.index):
-                        if test_size is not None: test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt[j])
+                    if test_size is not None:
+                        for j, id in enumerate(test.index):
+                            test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt[j])
                  
   
                     for j, id in enumerate(df.index):
                         df.loc[id, 'ignored_vol_normalizer'] = df.loc[id, 'ignored_vol_normalizer'].format(train_fmt[j])
                
                 else:
-            
-                    for j, id in enumerate(test.index):
-                        if test_size is not None: test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt)
+                    if test_size is not None:
+                        for j, id in enumerate(test.index):
+                            test.loc[id, 'ignored_vol_normalizer'] = test.loc[id, 'ignored_vol_normalizer'].format(fmt)
                   
               
                     for j, id in enumerate(df.index):
@@ -286,7 +311,7 @@ def load_prepro_noisy_data(path,
                         continue
                     if col.startswith(f"{tp}_{sfx}"):
                         df[col] = pd.to_numeric(df[col], errors='coerce')
-                        test[col] = pd.to_numeric(test[col], errors='coerce')
+                        if test_size is not None: test[col] = pd.to_numeric(test[col], errors='coerce')
                         std = max(df[col].std(), 1e-6) # avoid div by 0
                         mean = df[col].mean()   
                         print(f'standardizing {col} with mean {mean} and std {std}')
@@ -295,7 +320,7 @@ def load_prepro_noisy_data(path,
                     elif col in normalize_suffix and col not in processed_cols:
                         processed_cols.append(col)
                         df[col] = pd.to_numeric(df[col], errors='coerce')
-                        test[col] = pd.to_numeric(test[col], errors='coerce')
+                        if test_size is not None: test[col] = pd.to_numeric(test[col], errors='coerce')
                         std = max(df[col].std(), 1e-6) # avoid div by 0
                         mean = df[col].mean()   
                         print(f'standardizing {col} with mean {mean} and std {std}')
