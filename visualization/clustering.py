@@ -10,7 +10,8 @@ import tempfile
 from PIL import Image
 from matplotlib.gridspec import GridSpec
 import seaborn as sns
-
+fs = 16
+plt.rcParams.update({'font.size': fs})
 
 def plot_sankey(df, path, use_tempdir=False, tag=''):
     fixed_order = ['CR', 'PR', 'SD', 'PD']
@@ -82,6 +83,7 @@ def plot_sankey(df, path, use_tempdir=False, tag=''):
 
     # Create Sankey
     fig = go.Figure(data=[go.Sankey(
+        textfont=dict(size=fs, color='black'),
         arrangement="fixed",  # allows decent auto-layout with T0
         node=dict(
             pad=15,
@@ -158,6 +160,7 @@ def plot_cluster_centers(df, output_dir, data_cols, rano_cols, label_col="cluste
         ax00.set_title(f'Trajectory of Cluster {i}')
         ax00.legend()
         ax00.grid(True)
+        ax00.tick_params(axis='x', labelrotation=45) 
 
         # --- Right plot: initial volumes boxplot ---
         ax01.boxplot(init_vol, vert=True, patch_artist=True)
@@ -236,7 +239,7 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
     print('found unique labels:', unique_labels)
 
     colors = sns.color_palette("hls", len(unique_labels))
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 8))
 
     # Plot individual points
     for i, label in enumerate(unique_labels):
@@ -249,13 +252,17 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
         cluster_df = df[df[label_col] == label]
         mean_traj = cluster_df[data_cols].mean(axis=0)
         plt.plot(['0', '60', '120', '180', '240', '300', '360'], mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label} = {len(cluster_df)}')
+        for x, y in zip(['0', '60', '120', '180', '240', '300', '360'], mean_traj):
+            if y > 16:
+                plt.text(x, 16, f'{y:.1f}', fontsize=10, ha='center', va='top', color=colors[i], rotation=90, clip_on=False)
 
-    plt.ylim(-0.1, 2)
+    plt.ylim(-0.1, 16)
+    plt.yticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
     #plt.yscale('log')
     plt.xlabel("Time after treatment [days]")
     plt.ylabel("Relative volume to Treatment")
     plt.title("Combined Trajectories by Cluster")
-    plt.legend(loc="upper right")
+    plt.legend(loc="upper left")
     plt.grid(True)
     plt.tight_layout()
 

@@ -158,6 +158,7 @@ if __name__ == '__main__':
         labels = best_cluster.predict(complete_data[data_cols])
 
         complete_data['cluster'] = labels
+        
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
         filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 2)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
@@ -170,7 +171,8 @@ if __name__ == '__main__':
             data_cols = ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"] # overwrite the columns so it plots just the trajectory not the derivatives
 
         output = output.parent/(output.name+str(best_k))
-
+        to_save = complete_data[['Lesion ID', 'cluster']]
+        to_save.to_csv(output/'assignments.csv')
         # ## Make plots for cluster
         plot_cluster_centers(filtered_data, output, ["t0_volume", "t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"], rano_cols, label_col='cluster', init_col='t0_volume')
 

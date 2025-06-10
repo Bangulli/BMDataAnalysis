@@ -5,11 +5,11 @@ import pathlib as pl
 import os
 import re
 from sklearn.metrics import auc, roc_curve, roc_auc_score
-
+#value_map=None, source=pl.Path('''/home/lorenz/BMDataAnalysis/final_output/classic_experts_5fold_best_model_assignment_bugfix/classification/1v3/featuretypes=['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex', 'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'deep']_selection=None/LGBM'''
 source = pl.Path('''/home/lorenz/BMDataAnalysis/final_output/classic_experts_5fold_best_model_assignment_bugfix/classification/binary/featuretypes=['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex', 'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics', 'deep']_selection=LASSO/LogisticRegression''')
 folds = ['Fold 1', 'Fold 2', 'Fold 3', 'Fold 4', 'Fold 5']
 resamples = 1000
-value_map = {1:0, 0:1}
+value_map = {1:1, 0:0}
 results = {}
 
 for fold in folds:
@@ -40,6 +40,7 @@ colors = plt.cm.tab10.colors  # or any other colormap if you need more than 10
 
 for idx, (k, v) in enumerate(combined.items()):
     v['target'] = v['target'].map(value_map)
+    v['confidence'] = 1-v['confidence']
     aucs = []
     for i in range(resamples):
         sample_df = v.sample(n=len(v), replace=True)

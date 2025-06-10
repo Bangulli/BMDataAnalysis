@@ -41,8 +41,8 @@ if __name__ == '__main__':
         p = load_patient(met_path/pat)
         if not p: continue # load patient returns false if loading fails. it can happen for various reasons and definitely needs some improvements to robustness, starting from the saving function, since it sometimes leaves empty directories, which shouldnt happen
         print('== resampling patient:', pat)
-        p.discard_gaps(120, 360, False)
-        p.discard_swings(420, False)
+        # p.discard_gaps(120, 360, False)
+        # p.discard_swings(420, False)
         #p.resample_all_timeseries(360, 6, 'nearest')
         p.drop_short_timeseries(330)
         print('== extracting features for patient:', pat)

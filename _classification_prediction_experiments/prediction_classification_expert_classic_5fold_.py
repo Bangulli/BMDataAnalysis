@@ -23,15 +23,15 @@ from collections import Counter
 from scipy.stats import zscore
 
 if __name__ == '__main__':
-    predictor = {'LogisticRegression': LogisticRegression(class_weight='balanced')}#{'LogisticRegression': LogisticRegression(class_weight='balanced'), 'LGBM': LGBMClassifier(class_weight='balanced'), 'SVC':SVC(class_weight='balanced', probability=True)}
-    target = ['binary']#, 'binary', 'sota']
-    feature_selection = 'LASSO'
+    predictor = {'LGBM': LGBMClassifier(class_weight='balanced')}#{'LogisticRegression': LogisticRegression(class_weight='balanced'), 'LGBM': LGBMClassifier(class_weight='balanced'), 'SVC':SVC(class_weight='balanced', probability=True)}
+    target = ['1v3']#, 'binary', 'sota']
+    feature_selection = None#'LASSO'
     features = [
         #['volume'],
         #['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location'],
         #['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'deep'],
         # ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics'],
-        ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics', 'deep'],
+        ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics'],#'radiomics_original', 'border_radiomics', 'deep'],
     ]
     for prediction_type in target:
         for used_features in features:
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                 'sub-PAT0686:1',
                 'sub-PAT0807:3',
                 ]
-            output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/classic_experts_5fold_assignments_bugfix')
+            output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/classic_experts_5fold_assignments_is_radio_value')
             output = output_path/f'classification/{prediction_type}/featuretypes={used_features}_selection={feature_selection}'
             os.makedirs(output, exist_ok=True)
             categorical =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']#, 'Primary_loc_2', 'Primary_hist_1', 'Primary_hist_2']

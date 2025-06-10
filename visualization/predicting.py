@@ -194,11 +194,11 @@ def plot_prediction_metrics(result, output):
     plt.savefig(output/f"eval.png")
     plt.close()
     plt.clf()
-    fig = plot_confusion_matrices([result['confusion_matrix']])
-    fig.savefig(output/f"confusion_matrix.png")
-    fig.clf()
-    plt.close()
-    plt.clf()
+    # fig = plot_confusion_matrices([result['confusion_matrix']])
+    # fig.savefig(output/f"confusion_matrix.png")
+    # fig.clf()
+    # plt.close()
+    # plt.clf()
 
 def plot_regression_metrics(result, output, tag=''):
     values = []

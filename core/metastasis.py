@@ -157,6 +157,9 @@ class Metastasis():
             self.lesion_size_voxel = np.sum(self.image)
             self.lesion_volume = self.lesion_size_voxel*self.voxel_volume
 
+    def get_t1_image(self):
+        return sitk.ReadImage(self.t1_path)
+
     def get_t1_radiomics(self):
         if self.t1_path is not None and self.sitk is not None and sitk.GetArrayFromImage(self.sitk).any():
             extractor = featureextractor.RadiomicsFeatureExtractor()
