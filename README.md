@@ -19,6 +19,8 @@ This repository provides multiple approaches for longitudinal time series resamp
     - [Data](#data)
     - [Prediction](#prediction)
     - [visualization](#visualization)
+    - [Deep Features](#deep-features)
+    - [misc](#misc)
 
 ## Usage
 The environment is managed by anaconda (Python version 3.10)
@@ -211,3 +213,9 @@ Implementations of classical machine learning techniques and evaluation methods.
 
 ### [visualization](visualization) 
 Plotting functions for clustering results and evaluation metrics.
+
+### [Deep Features](deep_features)
+Feature extractors for deep vectors for the feature generation process.
+
+### [misc](misc_scripts)
+diverse scripts for counting, extracting and supplementing data and various other explorative tasks. not much use here.
