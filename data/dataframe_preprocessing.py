@@ -25,12 +25,9 @@ def load_prepro_data(path,
                      fill=0, # value to fill NAs with if None will be skipped
                      normalize_suffix=['radiomics'], # feature classes that need are normalized with the col_normalization fucntion
                      rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3},  # encoding for rano classes from string to categorical
-                     drop_CR_swing_length = 2, # if there is a swing to CR in the rano assignment of at least this lenght the row will be discarded
-                     interpolate_CR_swing_length = 1, # if there is a swing to CR in the rano assignment of at most this length, the values will be interpolated
                      time_required=False, # if true will include timedelta in the output, used for graphs. regular prediction may not need this
-                     normalize_volume=None, # wheter or not to normalize the volume and if so what kind of normalization to use: True=norm values by t0, False=No norm, '3root' use cubic rood
+                     normalize_volume="std", # wheter or not to normalize the volume and if so what kind of normalization to use: True=norm values by t0, False=No norm, '3root' use cubic rood
                      save_processed = None, # saves preprocessed data to here if exists will load and return
-                     outlier_detection_factor = 5, # if a lesion shrinks or grows by more than this factor in between two neighboring timepoints during its observation it is regarded as an outlier and dropped
                      add_index_as_col=False): 
     """
     Main data loading and preprocessing function

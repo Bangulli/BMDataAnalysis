@@ -70,6 +70,7 @@ class SimpleGCN(torch.nn.Module):
     def forward(self, data):
         x, edge_index, edge_attr, edge_weights = data.x, data.edge_index, data.edge_attr, data.edge_weights
         x = self.conv1(x, edge_index, edge_weight=edge_weights)
+        x = F.relu(x)
         x = global_mean_pool(x, data.batch)
         x = self.lin1(x)
         if self.num_classes == 1:
@@ -79,12 +80,8 @@ class SimpleGCN(torch.nn.Module):
     
     def save(self, path):
         torch.save(self, path/'SimplestGCN.pkl')
-
     
 class GAT(torch.nn.Module):
-    """
-    Random Bullshit GO!™
-    """
     def __init__(self, num_classes, num_node_features):
         super().__init__()
         ## encoder
@@ -104,12 +101,7 @@ class GAT(torch.nn.Module):
     def save(self, path):
         torch.save(self, path/'GAT.pkl')
     
-
-
 class BigGAT(torch.nn.Module):
-    """
-    Random Bullshit GO!™
-    """
     def __init__(self, num_classes, num_node_features):
         super().__init__()
         ## encoder

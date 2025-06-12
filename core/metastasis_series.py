@@ -271,7 +271,7 @@ class MetastasisTimeSeries():
         for k0, k1, k2  in zip(self.keys, list(self.time_series.keys()), list(self.dates.keys())):
             if not k0==k1==k2:
                 print(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
-                #if raise_on_invalid: raise RuntimeError(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
+                if raise_on_invalid: raise RuntimeError(f"Key order is not matched in underlying structures, got {k0} in keys list; {k1} in time_series keys and {k2} in dates keys")
             if prev is None:
                 prev = self.dates[k2]
             else:

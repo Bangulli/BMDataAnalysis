@@ -26,6 +26,13 @@ class Patient():
     Represents a patient in the dataset
     """
     def __init__(self, path: pl.Path, load_mets = False, log=Printer(), met_dir_name:str='mets'):
+        """
+        BrainMetsDataAnalysis = BMDA
+        path = pl.Path object, the path do the patient source, can be the output of the pipeline or a stored patient in the BMDA format
+        load_mets = loads mets from disk instead of parsing them, set to true if path is patient in BMDA format
+        log = prettyprint.Printer object will be instantiated on setup, but can be an object from a higher hierarchy script
+        met_dir_name = string, relevant when mets are parsed from Pipeline output, looks for this directory to find the binary mask of lesion resegmentations
+        """
         self.path = path
         self.id = path.name
         self.log = log
