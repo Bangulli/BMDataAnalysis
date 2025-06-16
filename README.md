@@ -24,12 +24,18 @@ This repository provides multiple approaches for longitudinal time series resamp
     - [misc](#misc)
 
 ## Usage
-The environment is managed by anaconda (Python version 3.10)
-Anaconda [requirements](requirements.txt)
-Some packages are not available on conda, so it is supplemented with pip [requirements](requirements_pip.txt)
+The environment is managed by anaconda (Python version 3.10), the dependencies are stored in the [Environment YAML](environment.yml)
+After cloning the repository set the working directory to the local repository and call
+
+```bash
+  conda env create -f environment.yml -n YOUR_ENVIRONMENT_NAME
+```
 
 - [parse_mets](parse_mets.py) is an example on how to use the data structure to load and parse the results from the [Pipeline](https://github.com/Bangulli/BMPipeline) to a lesion level dataset
 - [feature_extraction](feature_extraction.py) is an example on how to extract features from a lesion level dataset.
+
+These scripts allow the parsing of metastases and the extraction of features. 
+The features are used in [these scripts](/MICCAI_submission/) to train models for treatment response prediction, lesion growth trajectory clustering and statistical analyses.
 
 ## Approach
 We extract features from the lesion time series and resample it into a series with homogeneous intervals in between datapoints. Volume resampling is done in either Nearest neighbor, Linear or BSpine interpolation. The time series itself (dataobjects with images) can only be resampled with nearest neighbor to keep the link between lesion volume and image.

@@ -1,11 +1,10 @@
 from core import Metastasis
 from core import MetastasisTimeSeries
-from core import Patient, load_patient, PatientMetCounter
+from core import Patient, load_patient
 import csv
 import pathlib as pl
 import os
 from PrettyPrint import *
-from scripts.compare_segs import *
 import pandas as pd
 import ast
 from visualization import *
@@ -26,6 +25,7 @@ if __name__ == '__main__':
 
 
     ## intially parses the metastases
+    value_dicts = []
     logger = Printer(log_type='txt')
     for pat in pats:
         print('== working on patient:', pat)
@@ -58,5 +58,3 @@ if __name__ == '__main__':
     print(ranos)
     plot_sankey(df[ranos], met_path/folder_name, tag='all_')
    
-
-   ### patient 17 has no data, check that
