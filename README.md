@@ -9,6 +9,7 @@ This repository provides multiple approaches for longitudinal time series resamp
   - [Contents](#contents)
   - [Usage](#usage)
   - [Approach](#approach)
+  - [MICCAI LMID](#miccai-lmid)
   - [Datastructure](#datastructure)
   - [Packages](#packages)
     - [Core](#core)
@@ -41,6 +42,21 @@ The column tX_timedelta_days stores the days elapsed from t0.
 Missing values are imputed by time weighted linear interpolation for volume and radiomic features.
 Prediction can be performed with classical methods (by concatenating timepoint feature vectors) or graph methods (by modeling the timeseries itself as a graph)
 Clustering is done with stepmix, tsxmeans or tsxshapes. Attempts were made with rpy2 interaction to run more powerful clustering algorithms in R
+
+## MICCAI LMID
+The code for experiments and evaluations run for the submission to the MICCAI workshop on Learning with Longitudinal Medical Images and Data are located in this [folder](/MICCAI_submission/).
+- [_classical_ml_5fold](/MICCAI_submission/_classical_ml_5fold.py)
+  - The script used to train the LGBM model for both prediction tasks with Radiomic, Volume and Clinical features
+- [_gml_general_5fold](/MICCAI_submission/_gml_general_5fold.py)
+  - The script used to train a general GML model for both prediction tasks with Radiomic, Volume and Clinical features
+- [_gml_time_specific_5fold](/MICCAI_submission/_gml_time_specific_5fold.py)
+  - The script used to train a time specific GML model for both prediction tasks with Radiomic, Volume and Clinical features
+- [bootstrap_auc](/MICCAI_submission/bootstrap_auc.py)
+  - The script used to compute the AUC confidence interval with bootstrapping
+- [clustering_stepmix](/MICCAI_submission/clustering_stepmix.py)
+  - The script used to perform clustering on the time series data with the StepMix package
+- [permutation_test](/MICCAI_submission/permutation_test.py)
+  - The script used to perform the permutation test within the same model across timepoints and within the same timepoint across models
 
 ## Datastructure
 A Brain Mets Data Analysis (BMDA) is structured like this

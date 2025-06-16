@@ -120,3 +120,7 @@ rano_flow_sankey_plot.png
 rano_flow_sankey_plot.png
 deep_features/cnn3d_nnunet_local_global_100ep_checkpoint.pth
 final_output
+MICCAI_submission/Classical
+MICCAI_submission/GML*
+MICCAI_submission/permutation_tests
+legacy

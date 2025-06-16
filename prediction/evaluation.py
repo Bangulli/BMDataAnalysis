@@ -30,7 +30,7 @@ def classification_evaluation(rano_gt, rano_pd, ids, rano_encoding=None, rano_pr
     res['f1'] = sklearn.metrics.f1_score(rano_gt, rano_pd, average='weighted')
     res['precision'] = sklearn.metrics.precision_score(rano_gt, rano_pd, average='weighted')
     res['recall'] = sklearn.metrics.recall_score(rano_gt, rano_pd, average='weighted')
-    res['classification_report'] = sklearn.metrics.classification_report(rano_gt, rano_pd, digits=4)
+    #res['classification_report'] = sklearn.metrics.classification_report(rano_gt, rano_pd, digits=4)
     #res['confusion_matrix'] = sklearn.metrics.confusion_matrix(rano_gt, rano_pd, sample_weight=weights, normalize='true', labels=list(rano_encoding.keys()))
     return res
 

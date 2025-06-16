@@ -24,17 +24,11 @@ from scipy.stats import zscore
 
 if __name__ == '__main__':
     predictor = {'LGBM': LGBMClassifier(class_weight='balanced')}#{'LogisticRegression': LogisticRegression(class_weight='balanced'), 'LGBM': LGBMClassifier(class_weight='balanced'), 'SVC':SVC(class_weight='balanced', probability=True)}
-    target = ['1v3']#, 'binary', 'sota']
-    feature_selection = None#'LASSO'
-    features = [
-        #['volume'],
-        #['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location'],
-        #['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'deep'],
-        # ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics'],
-        ['volume', 'total_lesion_count', 'total_lesion_volume', 'Sex',	'Age@Onset', 'Weight', 'Height', 'Primary_loc_1', 'Primary_hist_1', 'lesion_location', 'radiomics_original', 'border_radiomics'],#'radiomics_original', 'border_radiomics', 'deep'],
-    ]
+    target = ['1v3', 'binary']#, 'sota']
+    patient_features = ['Age@Onset', 'Weight', 'Height']
+    tp_features = ['volume', 'radiomics']
+    categorical_features =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']
     for prediction_type in target:
-        for used_features in features:
             if prediction_type == 'binary':
                 rano_encoding={'CR':0, 'PR':0, 'SD':1, 'PD':1}
                 classes = ['resp', 'non-resp']
@@ -47,15 +41,6 @@ if __name__ == '__main__':
             else:
                 rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}
                 classes = list(rano_encoding.keys())
-
-            if feature_selection == 'LASSO':
-                eliminator = d.LASSOFeatureEliminator(alpha=0.1)
-            elif feature_selection == 'correlation':
-                eliminator = d.FeatureCorrelationEliminator(0.9)
-            elif feature_selection == 'model':
-                eliminator = d.ModelFeatureEliminator()
-            else:
-                eliminator = None
 
             data_prefixes = ["t0", "t1", "t2", "t3", "t4", "t5", "t6"] # used in the training method to select the features for each step of the sweep
             volume_cols = [c+'_volume' for c in data_prefixes] # used to normalize the volumes
@@ -84,31 +69,38 @@ if __name__ == '__main__':
                 'sub-PAT0686:1',
                 'sub-PAT0807:3',
                 ]
-            output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/classic_experts_5fold_assignments_is_radio_value')
-            output = output_path/f'classification/{prediction_type}/featuretypes={used_features}_selection={feature_selection}'
+            
+            output_path = pl.Path(f'/home/lorenz/BMDataAnalysis/MICCAI_submission/Classical')
+            output = output_path/f'classification/{prediction_type}/featuretypes={patient_features} - {categorical_features} - {tp_features}'
             os.makedirs(output, exist_ok=True)
-            categorical =  ['Sex',	'Primary_loc_1', 'lesion_location', 'Primary_hist_1']#, 'Primary_loc_2', 'Primary_hist_1', 'Primary_hist_2']
+            
+
             data = pl.Path(f'/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/final_extraction/all_features_nn.csv')
-            data, _ = d.load_prepro_data(data,
-                                            discard=discard,
-                                                    categorical=categorical,
-                                                    fill=0,
-                                                    used_features=used_features,
-                                                    test_size=None,
-                                                    drop_suffix=eliminator,
-                                                    prefixes=data_prefixes,
-                                                    target_suffix='rano',
-                                                    normalize_suffix=[f for f in used_features if f!='volume'],
-                                                    rano_encoding=rano_encoding,
-                                                    time_required=False,
-                                                    interpolate_CR_swing_length=1,
-                                                    drop_CR_swing_length=2,
-                                                    normalize_volume='std',
-                                                    add_index_as_col=True,
-                                                    save_processed=output/'encoding_test_used_data.csv')
+            data = pd.read_csv(data, index_col="Lesion ID")
+            
+            keep_col = ['t6_rano'] + categorical_features + patient_features
+            for c in data.columns:
+                for p in data_prefixes:
+                    for f in tp_features:
+                        if c.startswith(f"{p}_{f}"):
+                            keep_col.append(c)
+            
+            data.drop(index=discard, inplace=True)
+            data.drop(columns=[c for c in data.columns if c not in keep_col], inplace=True)
+            data['t6_rano'] = data['t6_rano'].map(rano_encoding).astype(int)
+            #print([c for c in data.columns if not c.startswith('t')]
+            extra_features = patient_features.copy()
+            for col in categorical_features:
+                dummies = pd.get_dummies(data[col], prefix=col, dummy_na=False)
+                extra_features += list(dummies.columns)
+                data.drop(columns=col, inplace=True)
+                data = pd.concat([data, dummies], axis=1)
+            data.fillna(0, inplace=True)
+
             dist = Counter(data['t6_rano'])
             inv_enc = {v:k for v,k in enumerate(classes)}
             dist = {inv_enc[k]:v for k,v in dist.items()}
+            print("Class distribution is:", dist)
         
             os.makedirs(output, exist_ok=True)
             with open(output/'used_feature_names.txt', 'w') as file:
@@ -117,11 +109,11 @@ if __name__ == '__main__':
                     file.write(f"   - {c}\n")
                 file.write("NOTE: rano columns are used as targets not as prediction")
             extra_data = [c for c in data.columns if not (c.startswith('ignored') or c.split('_')[0] in data_prefixes or 'Lesion ID' in c)]
-            print("using extra data cols", extra_data)
+            print("using extra data cols", patient_features)
 
 
             for method, model in predictor.items():
                 wdir = output/method
-                os.makedirs(wdir)
-                _, res_quant = train_classification_model_sweep_cv(model, data, data_prefixes=data_prefixes, rano_encoding=inv_enc, prediction_targets=rano_cols, working_dir=wdir, extra_data=extra_data)
+                os.makedirs(wdir, exist_ok=True)
+                _, res_quant = train_classification_model_sweep_cv(model, data, data_prefixes=data_prefixes, rano_encoding=rano_encoding, prediction_target='t6_rano', working_dir=wdir, extra_data=extra_features)
                 plot_prediction_metrics_sweep(res_quant, wdir, classes=classes, distribution=dist)

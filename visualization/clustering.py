@@ -22,7 +22,7 @@ def plot_sankey(df, path, use_tempdir=False, tag=''):
         'PD': '#d62728'   # red
     }
 
-    labels = ['T0']  # single origin node
+    labels = ['N/A']  # single origin node
     values = [len(df)]
     label_lookup = {'T0': 0}
     node_colors = ['#aaaaaa']
@@ -36,7 +36,7 @@ def plot_sankey(df, path, use_tempdir=False, tag=''):
         for i, cat in enumerate(fixed_order):
             label = f"T{t_idx+1}-{cat}"
             label_lookup[label] = len(labels)
-            labels.append(label)
+            labels.append(cat)
             node_colors.append(base_colors.get(cat, "gray"))
             node_y.append(i * step_y)
 

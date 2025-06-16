@@ -10,6 +10,7 @@ from sklearn.metrics import make_scorer, balanced_accuracy_score, f1_score
 from sklearn.datasets import make_regression
 from sklearn.model_selection import GridSearchCV, train_test_split, StratifiedKFold, cross_validate
 import os
+import csv
 
 def train_classification_model_sweep(model, df_train, df_test, data_prefixes, prediction_targets, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}, working_dir=pl.Path('./'), extra_data=[]):
     """
@@ -73,7 +74,7 @@ def train_classification_model_sweep(model, df_train, df_test, data_prefixes, pr
 
     return models, quant_results
 
-def train_classification_model_sweep_cv(model, df, data_prefixes, prediction_targets, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}, working_dir=pl.Path('./'), extra_data=[]):
+def train_classification_model_sweep_cv(model, df, data_prefixes, prediction_target, verbose=True, rano_encoding={'CR':0, 'PR':1, 'SD':2, 'PD':3}, working_dir=pl.Path('./'), extra_data=[]):
     """
     Trains a sweep set of models to provided data.
     sweep == sweeps over the set and trains multiple possible configurations by training different feature configs to predict the next in time and 1 year response
@@ -83,55 +84,53 @@ def train_classification_model_sweep_cv(model, df, data_prefixes, prediction_tar
     df_test: a pandas dataframe with the test data, result metrics will be computed using this
     verbose: verbosity level, to control reporting while running, default True = print to console, False = dont 
     """
-    if verbose: print(f'Encoding RANO response strings using encoding {rano_encoding}')
-    rano_cols = [c for c in df.columns if c in prediction_targets]
-    df[rano_cols] = df[rano_cols].applymap(lambda x: rano_encoding.get(x, x))
     models = {}
     quant_results = {}
-    for i in range(1, len(prediction_targets)):
+    for c in df.columns:
+        df[c] = pd.to_numeric(df[c], 'coerce')
 
-        features = [d for d in df.columns if d not in prediction_targets and d.split('_')[0] in data_prefixes[:i]]
+    for i in range(1, len(data_prefixes)):
+        features = [d for d in df.columns if d != prediction_target and d.split('_')[0] in data_prefixes[:i]]
         features += extra_data
-
-        key_year = f"1yr_{data_prefixes[:i]}->{prediction_targets[-1]}"
+        with open(working_dir/'all_features_used.txt', 'w') as file:
+            [file.write(f"{f}\n") for f in features]
+        key_year = f"1yr_{data_prefixes[:i]}->{prediction_target}"
         if verbose: print(f'Training configuration {i}: redacted & {key_year}')
         if verbose: print(f"using nontimepoint features {extra_data}")
-        if verbose: [print(f"used feature: {c}") for c in features]
-        if verbose: print(f"target variable are: {prediction_targets[-1]} for one year and {prediction_targets[i]} for next value")
-
-        
+        if verbose: print(f"target variable is: {prediction_target}")
         if verbose: print("= Initialized models")
-
-        # Define scoring dictionary
-        # scoring = {
-        #     'balanced_accuracy': make_scorer(balanced_accuracy_score),
-        #     'f1': make_scorer(f1_score, average='binary'),  # use 'macro' or 'weighted' for multiclass
-        #     'precision': make_scorer(sklearn.metrics.precision_score),
-        #     'recall': make_scorer(sklearn.metrics.recall_score)
-        # }
-
-        # cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        # results = cross_validate(models[key_year], df[features], df[prediction_targets[-1]], cv=cv, scoring=scoring)
-        # results = {k.replace('test_',''):np.mean(v) for k, v in results.items()}
-        # print(results)
-
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         all_folds = []
-        for fold, (train_idx, val_idx) in enumerate(skf.split(df, df[prediction_targets[-1]])):
+        for fold, (train_idx, val_idx) in enumerate(skf.split(df, df[prediction_target])):
             print(f"Fold {fold+1}")
             wdir = working_dir/f"Fold {fold+1}"/key_year
             os.makedirs(wdir, exist_ok=True)
             train_df = df.iloc[train_idx].reset_index(drop=True)
             test_df = df.iloc[val_idx].reset_index(drop=True)
-            fold_model = copy.deepcopy(model)
-            fold_model.fit(train_df[features], train_df[prediction_targets[-1]])
 
-            gt = test_df[prediction_targets[-1]]
-            ids = test_df['Lesion ID']
+            print('Standardizing values')
+            with open(wdir/"standardization.csv", "w") as file:
+                writer = csv.DictWriter(file, fieldnames=['column', 'mean', 'std'])
+                writer.writeheader()
+                for col in train_df.columns:
+                    if col in extra_data or col == prediction_target:
+                        continue
+                    mean = train_df[col].mean()
+                    std = train_df[col].std()
+                    ref = {'column': col, 'mean': mean, 'std': std}
+                    writer.writerow(ref)
+                    train_df[col] = (train_df[col]-mean)/std
+                    test_df[col] = (test_df[col]-mean)/std
+
+            fold_model = copy.deepcopy(model)
+            fold_model.fit(train_df[features], train_df[prediction_target])
+
+            gt = test_df[prediction_target]
+            ids = test_df.index
             pred = fold_model.predict(test_df[features])
             prob = fold_model.predict_proba(test_df[features])[:, 1]
 
-            all_folds.append(classification_evaluation(gt, pred, ids, rano_encoding, prob, wdir))
+            all_folds.append(classification_evaluation(gt, pred, ids, None, prob, wdir))
 
             torch.save(fold_model, wdir/'model.pkl')
             

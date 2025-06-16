@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import os
 import seaborn as sns
 import numpy as np
-
+fs = 10
+plt.rcParams.update({'font.size': fs})
 def plot_prediction_metrics_sweep_fold(fold_results_list, output, next_value_prefix='nxt', one_year_prefix='1yr', classes='auto', distribution=None):
     os.makedirs(output, exist_ok=True)
     classification_metrics = ['balanced_accuracy', 'accuracy', 'f1', 'recall', 'precision']
