@@ -30,9 +30,6 @@ Some packages are not available on conda, so it is supplemented with pip [requir
 
 - [parse_mets](parse_mets.py) is an example on how to use the data structure to load and parse the results from the [Pipeline](https://github.com/Bangulli/BMPipeline) to a lesion level dataset
 - [feature_extraction](feature_extraction.py) is an example on how to extract features from a lesion level dataset.
-- The folder [_classification_prediction_experiments](/_classification_prediction_experiments/) contains the scripts used in training
-- The folder [_clustering_experiments](/_clustering_experiments/) contains the scripts used for clustering
-- The folder [_regression_prediction_experiments](/_regression_prediction_experiments/) contains scripts for experimental regression experiments
 
 ## Approach
 We extract features from the lesion time series and resample it into a series with homogeneous intervals in between datapoints. Volume resampling is done in either Nearest neighbor, Linear or BSpine interpolation. The time series itself (dataobjects with images) can only be resampled with nearest neighbor to keep the link between lesion volume and image.
