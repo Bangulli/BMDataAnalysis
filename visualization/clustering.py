@@ -101,12 +101,12 @@ def plot_sankey(df, path, use_tempdir=False, tag=''):
         )
     )])
 
-    fig.update_layout(title_text="RANO Flow Over Time", font_size=12)
+    #fig.update_layout(title_text="RANO Flow Over Time", font_size=12)
 
     if not use_tempdir:
-        fig.write_image(path /f"{tag}rano_flow_sankey_plot.png", width=1000, height=600)
+        fig.write_image(path /f"{tag}rano_flow_sankey_plot.svg", width=1000, height=600)
     else:
-        temp_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        temp_path = tempfile.NamedTemporaryFile(suffix=".svg", delete=False)
         fig.write_image(temp_path, width=1000, height=600)
         return temp_path
 
@@ -266,7 +266,7 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
     plt.grid(True)
     plt.tight_layout()
 
-    out_file = os.path.join(path, "combined_trajectories.png")
+    out_file = os.path.join(path, "combined_trajectories.svg")
     plt.savefig(out_file)
     plt.close()
 

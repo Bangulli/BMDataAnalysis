@@ -94,7 +94,7 @@ if __name__ == '__main__':
     else: subsets= {f'all n_samples{len(all_data)}':all_data} # use all data
 
     for tag, complete_data in subsets.items():
-        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/final_output/{folder_name}/{method_name}_{tag} n_clusters')
+        output =  pl.Path(f'/home/lorenz/BMDataAnalysis/MICCAI_submission/{folder_name}/{method_name}_{tag} n_clusters')
         
         k = 5#range(2,42)
         

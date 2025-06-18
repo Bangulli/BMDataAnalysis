@@ -135,6 +135,9 @@ def to_atlas(atlas_t1, atlas_lbl, atlas_hemis, mov_img, mov_lesion, df_labels, v
     if verbose: mov_img.plot(overlay=atlas_t1, title='Before Registration', filename='/home/lorenz/BMDataAnalysis/before.png')
     # perofrm reg and trans
     reg = ants.registration(atlas_t1, mov_img, 'TRSAA') # Affine, SyNCC
+    # ants.image_write(atlas_t1, 'atlas.nii.gz')
+    # ants.image_write(reg['warpedmovout'], 'mov_img.nii.gz')
+    # ants.image_write(atlas_lbl, 'atlas_lbl.nii.gz')
     im_t1_reg = reg['warpedmovout']
     im_pred_reg = ants.apply_transforms(fixed = atlas_t1, moving = mov_lesion, transformlist = reg['fwdtransforms'], interpolator  = 'nearestNeighbor')
     
@@ -149,5 +152,7 @@ def to_atlas(atlas_t1, atlas_lbl, atlas_hemis, mov_img, mov_lesion, df_labels, v
 
      
 if __name__ == '__main__':
-    met = metastasis.load_metastasis(pl.Path('/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_502/sub-PAT0741/Metastasis 0/t0 - 20170822113221'))
-    print(met.get_location_in_brain())
+    img = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_test/sub-PAT0015/Metastasis 0/t0 - 20180903132557/t1.nii.gz'
+    msk = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_test/sub-PAT0015/whole_brain.nii.gz'
+    lsn = '/mnt/nas6/data/Target/BMPipeline_full_rerun/PARSED_METS_task_test/sub-PAT0015/Metastasis 0/t0 - 20180903132557/metastasis_mask_binary.nii.gz'
+    _ = find_regions(img, lsn, msk)
