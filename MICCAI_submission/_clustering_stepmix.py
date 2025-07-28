@@ -161,7 +161,7 @@ if __name__ == '__main__':
         
         print(f'Best clustering achieved an AIC of {best_aic} and a BIC of {best_bic} with {best_k} clusters')
         
-        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 2)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
+        filtered_data, invalid_labels = filter_small_clusters(complete_data, 'cluster', 15)#filter_small_clusters_by_samplestats(complete_data, 'cluster')#
 
         DB_score = sklearn.metrics.davies_bouldin_score(filtered_data[data_cols], filtered_data['cluster'])
         print(f'Clustering achieved a Davies-Bouldin score of {DB_score}')
@@ -180,18 +180,18 @@ if __name__ == '__main__':
         plot_sankey(filtered_data[rano_cols], output)
 
         # ## Make plots for dimesnionality reduction
-        mapping = {l: (-1 if l in invalid_labels else l) for l in np.unique(labels)}
-        complete_data['cluster'] = complete_data['cluster'].map(mapping)
-        plot_umap(complete_data, ["t0_volume", "t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"], output)
+        # mapping = {l: (-1 if l in invalid_labels else l) for l in np.unique(labels)}
+        # complete_data['cluster'] = complete_data['cluster'].map(mapping)
+        # plot_umap(complete_data, ["t0_volume", "t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"], output)
 
         # ## Make plot for cluster trajectories
         plot_combined_trajectories(filtered_data, ["t1_volume", "t2_volume", "t3_volume", "t4_volume", "t5_volume", "t6_volume"], 'cluster', output)
 
-        ## Make plot for recur prob
-        plot_recur_probs(filtered_data, rano_cols, 'cluster', output)
+        # ## Make plot for recur prob
+        # plot_recur_probs(filtered_data, rano_cols, 'cluster', output)
 
-        ## make plot for recur probs but allow any count, not just from t1
-        plot_recur_probs_noncausal(filtered_data, rano_cols, output)
+        # ## make plot for recur probs but allow any count, not just from t1
+        # plot_recur_probs_noncausal(filtered_data, rano_cols, output)
 
 
 

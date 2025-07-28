@@ -32,9 +32,10 @@ un = set(un)
 print(len(un), un)
 m = df[df['Sex']=='M']
 f = df[df['Sex']=='F']
+print(m.columns)
 
 print(f'#Patients: {len(f)} Female  {len(m)} Male')
-for col in ['t0_volume', 't6_rano']:
+for col in ['t0_volume', 't6_rano', 'Primary_loc_1']:
     #col = 't6_rano'
     if pd.api.types.is_numeric_dtype(f[col]):
         mean_f = f[col].mean()

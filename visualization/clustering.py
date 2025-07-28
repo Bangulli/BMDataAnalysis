@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import umap
 import tempfile
+from collections import Counter
 from PIL import Image
 from matplotlib.gridspec import GridSpec
 import seaborn as sns
-fs = 16
-plt.rcParams.update({'font.size': fs})
+fs = 20
+#plt.rcParams.update({'font.size': fs})
 
 def plot_sankey(df, path, use_tempdir=False, tag=''):
     fixed_order = ['CR', 'PR', 'SD', 'PD']
@@ -239,36 +240,86 @@ def plot_combined_trajectories(df, data_cols, label_col, path):
     print('found unique labels:', unique_labels)
 
     colors = sns.color_palette("hls", len(unique_labels))
-    plt.figure(figsize=(12, 8))
+    linestyles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1))]  # Last one is a custom dash-dot-dot pattern
 
+    plt.figure(figsize=(12, 8))
+    cluster_dicts = {}
+    sizes = []
     # Plot individual points
     for i, label in enumerate(unique_labels):
         cluster_df = df[df[label_col] == label]
-        for _, row in cluster_df.iterrows():
-            plt.scatter(['0', '60', '120', '180', '240', '300', '360'], row[data_cols], color=colors[i], alpha=0.3, s=10)
+        curr_dict = {}
+        curr_dict['avg_end_size'] = cluster_df[data_cols].mean(axis=0)[-1]
+        curr_dict['label'] = label
+        sizes.append(cluster_df[data_cols].mean(axis=0)[-1])
+        cnt = Counter(cluster_df['t6_rano'])
+        curr_dict = {**curr_dict, **cnt}
+        print(curr_dict)
+        cluster_dicts[cluster_df[data_cols].mean(axis=0)[-1]] = curr_dict
+
+        #for _, row in cluster_df.iterrows():
+            #plt.scatter(['0', '60', '120', '180', '240', '300', '360'], row[data_cols], color=colors[i], alpha=0.3, s=10)
+
+    ordering = {v:k for k, v in enumerate(sorted(sizes))}
+    print(ordering)
 
     # Plot average trajectory per cluster
-    for i, label in enumerate(unique_labels):
+    for i, v in enumerate(sorted(sizes)):
+        print(v)
+        label = cluster_dicts[v]['label']
+        print(label)
+        #clustid=ordering[cluster_dicts[label]['avg_end_size']]
         cluster_df = df[df[label_col] == label]
         mean_traj = cluster_df[data_cols].mean(axis=0)
-        plt.plot(['0', '60', '120', '180', '240', '300', '360'], mean_traj, color=colors[i], linewidth=2.5, label=f'Cluster {label} = {len(cluster_df)}')
-        for x, y in zip(['0', '60', '120', '180', '240', '300', '360'], mean_traj):
-            if y > 16:
-                plt.text(x, 16, f'{y:.1f}', fontsize=10, ha='center', va='top', color=colors[i], rotation=90, clip_on=False)
+        
+        make_cluster_pie_chart(cluster_dicts[v], path/f'pie_chart_clust_{i}.png', f'Cluster {i}')
 
+        plt.plot(['0', '60', '120', '180', '240', '300', '360'], mean_traj*100, linestyle=linestyles[i], color='gray', linewidth=2.5, label=f'Cluster {i} = {len(cluster_df)}')
+        # for x, y in zip(['0', '60', '120', '180', '240', '300', '360'], mean_traj):
+        #     if y > 16:
+        #         plt.text(x, 16, f'{y:.1f}', fontsize=10, ha='center', va='top', color=colors[i], rotation=90, clip_on=False)
+    plt.tick_params(axis='both', labelsize=14)
     plt.ylim(-0.1, 16)
-    plt.yticks([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
+    plt.yticks([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600])
     #plt.yscale('log')
-    plt.xlabel("Time after treatment [days]")
-    plt.ylabel("Relative volume to Treatment")
-    plt.title("Combined Trajectories by Cluster")
-    plt.legend(loc="upper left")
+    plt.xlabel("Time after treatment [days]", fontsize=16)
+    plt.ylabel("Relative volume to treatment volume [%]", fontsize=16)
+    #plt.title("Combined Trajectories by Cluster", fontsize=20)
+    plt.legend(loc="upper left", fontsize=16)
     plt.grid(True)
     plt.tight_layout()
 
     out_file = os.path.join(path, "combined_trajectories.svg")
     plt.savefig(out_file)
     plt.close()
+
+def make_cluster_pie_chart(data, path, title):
+    response_data = {k: v for k, v in data.items() if k in ['CR', 'PR', 'SD', 'PD']}
+
+    # Extract labels and sizes
+    labels = list(response_data.keys())
+    sizes = list(response_data.values())
+
+    base_colors = {
+        'CR': '#1f77b4',  # blue
+        'PR': '#ff7f0e',  # orange
+        'SD': '#2ca02c',  # green
+        'PD': '#d62728'   # red
+    }
+    def autopct_func(pct):
+        return ('%1.1f%%' % pct) if pct > 5 else ''
+    # Match colors to the labels
+    colors = [base_colors[label] for label in labels]
+    # Create pie chart
+    # Create local figure and axis
+    fig, ax = plt.subplots(figsize=(6, 6))
+    explode = [0.05 if v < 5 else 0 for v in sizes]
+    ax.pie(sizes, autopct='', startangle=90, colors=colors, textprops={'fontsize': 20})
+    ax.axis('equal')  # Equal aspect ratio ensures pie is a circle.
+    fig.suptitle(title, fontsize=14)
+    # Save to file and close
+    fig.savefig(path)
+    plt.close(fig)
 
 def plot_recur_probs(df, rano_cols, label_col, path):
     categories = ['CR', 'PR', 'PD', 'SD']

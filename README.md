@@ -8,11 +8,13 @@ This repository provides multiple approaches for longitudinal time series resamp
 - [Brain Metastases Data Analytics](#brain-metastases-data-analytics)
   - [Contents](#contents)
   - [Usage](#usage)
+  - [Citation](#citation)
   - [Approach](#approach)
   - [MICCAI LMID](#miccai-lmid)
   - [Datastructure](#datastructure)
   - [Packages](#packages)
     - [Core](#core)
+      - [Atlas](#atlas)
       - [Patient](#patient)
       - [Metastasis time series](#metastasis-time-series)
       - [Metastasis](#metastasis)
@@ -36,6 +38,13 @@ After cloning the repository set the working directory to the local repository a
 
 These scripts allow the parsing of metastases and the extraction of features. 
 The features are used in [these scripts](/MICCAI_submission/) to train models for treatment response prediction, lesion growth trajectory clustering and statistical analyses.
+
+## Citation
+If you use this repository in your projectes, please cite:
+
+```
+Kuhn, L., Abler, D., Richiardi, J., Hottinger, A. F., Schiappacasse, L., Dunet, V., Depeursinge, A., Andrearczyk, V. "AI-based response assessment and prediction  in longitudinal imaging for brain metastases treated with stereotactic radiosurgery", in Learning with Longitudinal Medical Images and Data (LMID at MICCAI), 2025 (in press)
+```
 
 ## Approach
 We extract features from the lesion time series and resample it into a series with homogeneous intervals in between datapoints. Volume resampling is done in either Nearest neighbor, Linear or BSpine interpolation. The time series itself (dataobjects with images) can only be resampled with nearest neighbor to keep the link between lesion volume and image.
@@ -96,6 +105,8 @@ If you need to load individual time series, use the MetastasisTimeSeries object
 If you need to load individual time points, use the Metastsis object. Or build your on proprietary function that handles the [data structure](#datastructure)
 
 These are the most important objects in this repo, they handle loading and feature generateion, the rest is just regular PyTorch and SKlearn using Pandas.DataFrames
+#### Atlas
+The atlas script contains an implementation for an atlas based lesion localization algorithm. It is used inside the Metastasis object to identify lesion location. Used at feature extraction time.
 #### Patient
 - Patient (object)
   - Models a patient, has multiple (MetastasisTimeSeries) in a list. Can parse mets from the Pipeline output or load them from Brain Mets Data Analysis (BMDA) custom lesion data format
@@ -182,7 +193,7 @@ These are the most important objects in this repo, they handle loading and featu
 
 ### [Clustering](clustering)
 Implementations of clustering algorithms Xmeans and Xshapes, unused and buggy implementations of rpy2 based clustering. Utils to estimate BIC/AIC.
-Used in [these scripts](/_clustering_experiments/).
+Used in [this script](/MICCAI_submission/_clustering_stepmix.py).
 
 ### [Data](data)
 Implementations of data loading functions. Loads csvs and prerpocesses them by encoding categoricals, normalization, etc. Also has graph dataset definitions for resampled and raw time series data. 
@@ -228,7 +239,19 @@ if the script has the suffix _noisy it means it handles non-resampled data and c
   - computes the derivatives of the volume over time
 
 ### [Prediction](prediction)
-Implementations of classical machine learning techniques and evaluation methods. Definition of models, and torch training engine.
+- [evaluation](/prediction/evaluation.py)
+  - evaluation functions that compute performance metrics and return them in dictionaries to be plotted later. also save the predictions passed to the functions as csv files.
+- [graph_classification_models](/prediction/graph_classification_models.py)
+  - model definitions for graph classification
+- [node_regression_models](/prediction/node_regresssion_models.py)
+  - model definitions for node regression experiments, unused. 
+- [sweep_classification](/prediction/sweep_classification.py)
+  - classic machine learning training implementations for classification problems
+- [sweep_regression](/prediction/sweep_regression.py)
+  - classic machine learning training implementations for regression problems, unused
+- [torch_engine](/prediction/torch_engine.py)
+  - training engine for graph classification models. splits the training set in train and validation, runs with the given schedulers, losses and optimizers. saves best models and does early stopping. returns the best model
+  - evaluation loops to predict on the test dataset of a given fold and perform evaluation.
 
 ### [visualization](visualization) 
 Plotting functions for clustering results and evaluation metrics.
