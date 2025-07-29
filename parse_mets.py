@@ -1,6 +1,6 @@
 from core import Metastasis
 from core import MetastasisTimeSeries
-from core import Patient, load_patient, PatientMetCounter
+from core import Patient, load_patient
 import csv
 import pathlib as pl
 import os

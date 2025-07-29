@@ -12,7 +12,7 @@
 
 from core import Metastasis
 from core import MetastasisTimeSeries
-from core import Patient, load_patient, PatientMetCounter
+from core import Patient, load_patient
 import csv
 import logging
 import pathlib as pl
